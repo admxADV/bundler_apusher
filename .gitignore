@@ -9,6 +9,7 @@ artifacts
 .DS_Store
 /.idea/bundler.iml
 /.idea/modules.xml
+/packages/bundler/localconfig/
 /packages/bundler/tsconfig.tsbuildinfo
 tsconfig.tsbuildinfo
 /packages/utils/src/types/
