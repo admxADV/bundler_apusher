@@ -32,7 +32,7 @@ export class Runner {
 		const net = await this.provider.getNetwork();
 		const chainId = net.chainId;
 		const dep = new DeterministicDeployer(this.provider);
-		const accountDeployer = await DeterministicDeployer.getAddress(new SimpleAccountFactory__factory(), 0, [
+		const accountDeployer = DeterministicDeployer.getAddress(new SimpleAccountFactory__factory(), 0, [
 			this.entryPointAddress,
 		]);
 		// const accountDeployer = await new SimpleAccountFactory__factory(this.provider.getSigner()).deploy().then(d=>d.address)
@@ -78,8 +78,10 @@ export class Runner {
 			target,
 			data,
 		});
+
 		try {
 			const userOpHash = await this.bundlerProvider.sendUserOpToBundler(userOp);
+			console.log("userOpHash=", userOpHash);
 			const txid = await this.accountApi.getUserOpReceipt(userOpHash);
 			console.log("reqId", userOpHash, "txid=", txid);
 		} catch (e: any) {
