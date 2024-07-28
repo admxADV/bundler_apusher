@@ -9,9 +9,7 @@ import { BigNumber, Signer, Wallet } from "ethers";
 import { formatEther, keccak256, parseEther } from "ethers/lib/utils";
 import { Command } from "commander";
 import {
-	DeterministicDeployer,
 	erc4337RuntimeVersion,
-	SimpleAccountFactory__factory,
 } from "@account-abstraction/utils";
 import fs from "fs";
 
