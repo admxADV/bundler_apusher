@@ -16,14 +16,6 @@
 		"declaration": true,
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
-		"sourceMap": true,
-		"baseUrl": ".",
-		"paths": {
-			"*": ["node_modules/*"],
-			"@account-abstraction/bundler/*": ["packages/bundler/src/*"],
-			"@account-abstraction/sdk/*": ["packages/sdk/src/*"],
-			"@account-abstraction/utils/*": ["packages/utils/src/*"],
-			"@account-abstraction/validation-manager/*": ["packages/validation-manager/src/*"]
-		}
+		"sourceMap": true
 	}
 }
