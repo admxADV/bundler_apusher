@@ -156,6 +156,7 @@ export class MethodHandlerERC4337 {
 			// }
 			// }
 		);
+
 		const ret = await provider.send("eth_call", rpcParams).catch((e: any) => {
 			throw new RpcError(decodeRevertReason(e) as string, ValidationErrors.SimulateValidation);
 		});

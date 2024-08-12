@@ -57,8 +57,9 @@ export async function resolveConfiguration(
 	let mnemonic: string;
 	let wallet: Wallet;
 	try {
-		mnemonic = process.env.BUNDLER_SIGNER_MNEMONIC as string;
-		wallet = Wallet.fromMnemonic(mnemonic).connect(provider);
+		// mnemonic = process.env.BUNDLER_SIGNER_MNEMONIC as string;
+		// wallet = Wallet.fromMnemonic(mnemonic).connect(provider);
+		wallet = new Wallet(process.env.BUNDLER_SIGNER_PK as string).connect(provider);
 	} catch (e: any) {
 		throw new Error(`Unable to read --mnemonic ${config.mnemonic}: ${e.message as string}`);
 	}

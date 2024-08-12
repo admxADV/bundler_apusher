@@ -8,9 +8,7 @@
 import { BigNumber, Signer, Wallet } from "ethers";
 import { formatEther, keccak256, parseEther } from "ethers/lib/utils";
 import { Command } from "commander";
-import {
-	erc4337RuntimeVersion,
-} from "@account-abstraction/utils";
+import { erc4337RuntimeVersion } from "@account-abstraction/utils";
 import fs from "fs";
 
 import { runBundler } from "../runBundler";
@@ -25,7 +23,10 @@ async function main(): Promise<void> {
 	const program = new Command()
 		.version(erc4337RuntimeVersion)
 		.option("--network <string>", "network name or url", "http://localhost:8545")
-		.option("--mnemonic <file>", "mnemonic/private-key file of signer account (to fund account). null for .env read")
+		.option(
+			"--mnemonic <file>",
+			"mnemonic/private-key file of signer account (to fund account). null for .env BUNDLER_SIGNER_PK read"
+		)
 		.option("--bundlerUrl <url>", "bundler URL", "http://localhost:3000/rpc")
 		.option("--entryPoint <string>", "address of the supported EntryPoint contract", ENTRY_POINT)
 		.option("--nonce <number>", "account creation nonce. default to random (deploy new account)")
@@ -64,7 +65,9 @@ async function main(): Promise<void> {
 		signer = Wallet.fromMnemonic(fs.readFileSync(opts.mnemonic, "ascii").trim()).connect(provider);
 	} else {
 		try {
-			signer = Wallet.fromMnemonic(process.env.BUNDLER_SIGNER_MNEMONIC as string).connect(provider);
+			// signer = Wallet.fromMnemonic(process.env.BUNDLER_SIGNER_MNEMONIC as string).connect(provider);
+			signer = new Wallet(process.env.BUNDLER_SIGNER_PK as string).connect(provider);
+			console.log(signer);
 			const network = await provider.getNetwork();
 			if (network.chainId === 1337 || network.chainId === 31337) {
 				deployFactory = true;
