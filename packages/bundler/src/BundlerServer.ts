@@ -1,265 +1,271 @@
-import bodyParser from 'body-parser'
-import cors from 'cors'
-import express, { Express, Response, Request } from 'express'
-import { Provider } from '@ethersproject/providers'
-import { Signer, utils } from 'ethers'
-import { parseEther } from 'ethers/lib/utils'
-import { Server } from 'http'
+import bodyParser from "body-parser";
+import cors from "cors";
+import express, { Express, Response, Request } from "express";
+import { Provider } from "@ethersproject/providers";
+import { Signer, utils } from "ethers";
+import { parseEther } from "ethers/lib/utils";
+import { Server } from "http";
 
 import {
-  AddressZero, decodeRevertReason,
-  deepHexlify, IEntryPoint__factory,
-  erc4337RuntimeVersion,
-  packUserOp,
-  RpcError,
-  UserOperation
-} from '@account-abstraction/utils'
+	AddressZero,
+	decodeRevertReason,
+	deepHexlify,
+	IEntryPoint__factory,
+	erc4337RuntimeVersion,
+	packUserOp,
+	RpcError,
+	UserOperation,
+} from "@account-abstraction/utils";
 
-import { BundlerConfig } from './BundlerConfig'
-import { MethodHandlerERC4337 } from './MethodHandlerERC4337'
-import { MethodHandlerRIP7560 } from './MethodHandlerRIP7560'
-import { DebugMethodHandler } from './DebugMethodHandler'
+import { BundlerConfig } from "./BundlerConfig";
+import { MethodHandlerERC4337 } from "./MethodHandlerERC4337";
+import { MethodHandlerRIP7560 } from "./MethodHandlerRIP7560";
+import { DebugMethodHandler } from "./DebugMethodHandler";
 
-import Debug from 'debug'
+import Debug from "debug";
 
-const debug = Debug('aa.rpc')
+const debug = Debug("aa.rpc");
 export class BundlerServer {
-  app: Express
-  private readonly httpServer: Server
-  public silent = false
+	app: Express;
+	private readonly httpServer: Server;
+	public silent = false;
 
-  constructor (
-    readonly methodHandler: MethodHandlerERC4337,
-    readonly methodHandlerRip7560: MethodHandlerRIP7560,
-    readonly debugHandler: DebugMethodHandler,
-    readonly config: BundlerConfig,
-    readonly provider: Provider,
-    readonly wallet: Signer
-  ) {
-    this.app = express()
-    this.app.use(cors())
-    this.app.use(bodyParser.json())
+	constructor(
+		readonly methodHandler: MethodHandlerERC4337,
+		readonly methodHandlerRip7560: MethodHandlerRIP7560,
+		readonly debugHandler: DebugMethodHandler,
+		readonly config: BundlerConfig,
+		readonly provider: Provider,
+		readonly wallet: Signer
+	) {
+		this.app = express();
+		this.app.use(cors());
+		this.app.use(bodyParser.json());
 
-    this.app.get('/', this.intro.bind(this))
-    this.app.post('/', this.intro.bind(this))
+		this.app.get("/", this.intro.bind(this));
+		this.app.post("/", this.intro.bind(this));
 
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    this.app.post('/rpc', this.rpc.bind(this))
+		// eslint-disable-next-line @typescript-eslint/no-misused-promises
+		this.app.post("/rpc", this.rpc.bind(this));
 
-    this.httpServer = this.app.listen(this.config.port)
-    this.startingPromise = this._preflightCheck()
-  }
+		this.httpServer = this.app.listen(this.config.port);
+		this.startingPromise = this._preflightCheck();
+	}
 
-  startingPromise: Promise<void>
+	startingPromise: Promise<void>;
 
-  async asyncStart (): Promise<void> {
-    await this.startingPromise
-  }
+	async asyncStart(): Promise<void> {
+		await this.startingPromise;
+	}
 
-  async stop (): Promise<void> {
-    this.httpServer.close()
-  }
+	async stop(): Promise<void> {
+		this.httpServer.close();
+	}
 
-  async _preflightCheck (): Promise<void> {
-    if (this.config.useRip7560Mode) {
-      // TODO: implement preflight checks for the RIP-7560 mode
-      return
-    }
-    if (await this.provider.getCode(this.config.entryPoint) === '0x') {
-      this.fatal(`entrypoint not deployed at ${this.config.entryPoint}`)
-    }
+	async _preflightCheck(): Promise<void> {
+		if (this.config.useRip7560Mode) {
+			// TODO: implement preflight checks for the RIP-7560 mode
+			return;
+		}
+		if ((await this.provider.getCode(this.config.entryPoint)) === "0x") {
+			this.fatal(`entrypoint not deployed at ${this.config.entryPoint}`);
+		}
 
-    // minimal UserOp to revert with "FailedOp"
-    const emptyUserOp: UserOperation = {
-      sender: AddressZero,
-      callData: '0x',
-      nonce: 0,
-      preVerificationGas: 0,
-      verificationGasLimit: 100000,
-      callGasLimit: 0,
-      maxFeePerGas: 0,
-      maxPriorityFeePerGas: 0,
-      signature: '0x'
-    }
-    // await EntryPoint__factory.connect(this.config.entryPoint,this.provider).callStatic.addStake(0)
-    try {
-      await IEntryPoint__factory.connect(this.config.entryPoint, this.provider).callStatic.getUserOpHash(packUserOp(emptyUserOp))
-    } catch (e: any) {
-      this.fatal(`Invalid entryPoint contract at ${this.config.entryPoint}. wrong version? ${decodeRevertReason(e, false) as string}`)
-    }
+		// minimal UserOp to revert with "FailedOp"
+		const emptyUserOp: UserOperation = {
+			sender: AddressZero,
+			callData: "0x",
+			nonce: 0,
+			preVerificationGas: 0,
+			verificationGasLimit: 100000,
+			callGasLimit: 0,
+			maxFeePerGas: 0,
+			maxPriorityFeePerGas: 0,
+			signature: "0x",
+		};
+		// await EntryPoint__factory.connect(this.config.entryPoint,this.provider).callStatic.addStake(0)
+		try {
+			const resp = await IEntryPoint__factory.connect(this.config.entryPoint, this.provider).callStatic.getUserOpHash(
+				packUserOp(emptyUserOp)
+			);
 
-    const signerAddress = await this.wallet.getAddress()
-    const bal = await this.provider.getBalance(signerAddress)
-    this.log('signer', signerAddress, 'balance', utils.formatEther(bal))
-    if (bal.eq(0)) {
-      this.fatal('cannot run with zero balance')
-    } else if (bal.lt(parseEther(this.config.minBalance))) {
-      this.log('WARNING: initial balance below --minBalance ', this.config.minBalance)
-    }
-  }
+			console.log(resp);
+		} catch (e: any) {
+			this.fatal(
+				`Invalid entryPoint contract at ${this.config.entryPoint}. wrong version? ${
+					decodeRevertReason(e, false) as string
+				}`
+			);
+		}
 
-  fatal (msg: string): never {
-    console.error('FATAL:', msg)
-    process.exit(1)
-  }
+		const signerAddress = await this.wallet.getAddress();
+		const bal = await this.provider.getBalance(signerAddress);
+		this.log("signer", signerAddress, "balance", utils.formatEther(bal));
+		if (bal.eq(0)) {
+			this.fatal("cannot run with zero balance");
+		} else if (bal.lt(parseEther(this.config.minBalance))) {
+			this.log("WARNING: initial balance below --minBalance ", this.config.minBalance);
+		}
+	}
 
-  intro (req: Request, res: Response): void {
-    res.send(`Account-Abstraction Bundler v.${erc4337RuntimeVersion}. please use "/rpc"`)
-  }
+	fatal(msg: string): never {
+		console.error("FATAL:", msg);
+		process.exit(1);
+	}
 
-  async rpc (req: Request, res: Response): Promise<void> {
-    let resContent: any
-    if (Array.isArray(req.body)) {
-      resContent = []
-      for (const reqItem of req.body) {
-        resContent.push(await this.handleRpc(reqItem))
-      }
-    } else {
-      resContent = await this.handleRpc(req.body)
-    }
+	intro(req: Request, res: Response): void {
+		res.send(`Account-Abstraction Bundler v.${erc4337RuntimeVersion}. please use "/rpc"`);
+	}
 
-    try {
-      res.send(resContent)
-    } catch (err: any) {
-      const error = {
-        message: err.message,
-        data: err.data,
-        code: err.code
-      }
-      this.log('failed: ', 'rpc::res.send()', 'error:', JSON.stringify(error))
-    }
-  }
+	async rpc(req: Request, res: Response): Promise<void> {
+		let resContent: any;
+		if (Array.isArray(req.body)) {
+			resContent = [];
+			for (const reqItem of req.body) {
+				resContent.push(await this.handleRpc(reqItem));
+			}
+		} else {
+			resContent = await this.handleRpc(req.body);
+		}
 
-  async handleRpc (reqItem: any): Promise<any> {
-    const {
-      method,
-      params,
-      jsonrpc,
-      id
-    } = reqItem
-    debug('>>', { jsonrpc, id, method, params })
-    try {
-      const result = deepHexlify(await this.handleMethod(method, params))
-      debug('sent', method, '-', result)
-      debug('<<', { jsonrpc, id, result })
-      return {
-        jsonrpc,
-        id,
-        result
-      }
-    } catch (err: any) {
-      // Try unwrapping RPC error codes wrapped by the Ethers.js library
-      if (err.error instanceof Error) {
-        // eslint-disable-next-line no-ex-assign
-        err = err.error
-      }
-      const error = {
-        message: err.message,
-        data: err.data,
-        code: err.code
-      }
-      this.log('failed: ', method, 'error:', JSON.stringify(error), err)
-      debug('<<', { jsonrpc, id, error })
-      return {
-        jsonrpc,
-        id,
-        error
-      }
-    }
-  }
+		try {
+			res.send(resContent);
+		} catch (err: any) {
+			const error = {
+				message: err.message,
+				data: err.data,
+				code: err.code,
+			};
+			this.log("failed: ", "rpc::res.send()", "error:", JSON.stringify(error));
+		}
+	}
 
-  async handleMethod (method: string, params: any[]): Promise<any> {
-    let result: any
-    switch (method) {
-      /** RIP-7560 specific RPC API */
-      case 'eth_sendTransaction':
-        if (!this.config.useRip7560Mode) {
-          throw new RpcError(`Method ${method} is not supported`, -32601)
-        }
-        if (params[0].sender != null) {
-          result = await this.methodHandlerRip7560.sendRIP7560Transaction(params[0])
-        // } else {
-        //   result = await (this.provider as JsonRpcProvider).send(method, params)
-        }
-        break
-      case 'eth_getTransactionReceipt':
-        if (!this.config.useRip7560Mode) {
-          throw new RpcError(`Method ${method} is not supported`, -32601)
-        }
-        result = await this.methodHandlerRip7560.getRIP7560TransactionReceipt(params[0])
-        break
-      /** EIP-4337 specific RPC API */
-      case 'eth_chainId':
-        // eslint-disable-next-line no-case-declarations
-        const { chainId } = await this.provider.getNetwork()
-        result = chainId
-        break
-      case 'eth_supportedEntryPoints':
-        result = await this.methodHandler.getSupportedEntryPoints()
-        break
-      case 'eth_sendUserOperation':
-        result = await this.methodHandler.sendUserOperation(params[0], params[1])
-        break
-      case 'eth_estimateUserOperationGas':
-        result = await this.methodHandler.estimateUserOperationGas(params[0], params[1], params[2])
-        break
-      case 'eth_getUserOperationReceipt':
-        result = await this.methodHandler.getUserOperationReceipt(params[0])
-        break
-      case 'eth_getUserOperationByHash':
-        result = await this.methodHandler.getUserOperationByHash(params[0])
-        break
-      case 'web3_clientVersion':
-        result = this.methodHandler.clientVersion()
-        break
-      case 'debug_bundler_clearState':
-        this.debugHandler.clearState()
-        result = 'ok'
-        break
-      case 'debug_bundler_dumpMempool':
-        result = await this.debugHandler.dumpMempool()
-        break
-      case 'debug_bundler_clearMempool':
-        this.debugHandler.clearMempool()
-        result = 'ok'
-        break
-      case 'debug_bundler_setReputation':
-        await this.debugHandler.setReputation(params[0])
-        result = 'ok'
-        break
-      case 'debug_bundler_dumpReputation':
-        result = await this.debugHandler.dumpReputation()
-        break
-      case 'debug_bundler_clearReputation':
-        this.debugHandler.clearReputation()
-        result = 'ok'
-        break
-      case 'debug_bundler_setBundlingMode':
-        await this.debugHandler.setBundlingMode(params[0])
-        result = 'ok'
-        break
-      case 'debug_bundler_setBundleInterval':
-        await this.debugHandler.setBundleInterval(params[0], params[1])
-        result = 'ok'
-        break
-      case 'debug_bundler_sendBundleNow':
-        result = await this.debugHandler.sendBundleNow()
-        if (result == null) {
-          result = 'ok'
-        }
-        break
-      case 'debug_bundler_getStakeStatus':
-        result = await this.debugHandler.getStakeStatus(params[0], params[1])
-        break
-      default:
-        throw new RpcError(`Method ${method} is not supported`, -32601)
-    }
-    return result
-  }
+	async handleRpc(reqItem: any): Promise<any> {
+		const { method, params, jsonrpc, id } = reqItem;
+		debug(">>", { jsonrpc, id, method, params });
+		try {
+			const result = deepHexlify(await this.handleMethod(method, params));
+			debug("sent", method, "-", result);
+			debug("<<", { jsonrpc, id, result });
+			return {
+				jsonrpc,
+				id,
+				result,
+			};
+		} catch (err: any) {
+			// Try unwrapping RPC error codes wrapped by the Ethers.js library
+			if (err?.error instanceof Error) {
+				// eslint-disable-next-line no-ex-assign
+				err = err.error;
+			}
+			const error = {
+				message: err.message,
+				data: err.data,
+				code: err.code,
+			};
+			this.log("failed: ", method, "error:", JSON.stringify(error), err);
+			debug("<<", { jsonrpc, id, error });
+			return {
+				jsonrpc,
+				id,
+				error,
+			};
+		}
+	}
 
-  log (...params: any[]): void {
-    if (!this.silent) {
-      console.log(...arguments)
-    }
-  }
+	async handleMethod(method: string, params: any[]): Promise<any> {
+		let result: any;
+		switch (method) {
+			/** RIP-7560 specific RPC API */
+			case "eth_sendTransaction":
+				if (!this.config.useRip7560Mode) {
+					throw new RpcError(`Method ${method} is not supported`, -32601);
+				}
+				if (params[0].sender != null) {
+					result = await this.methodHandlerRip7560.sendRIP7560Transaction(params[0]);
+					// } else {
+					//   result = await (this.provider as JsonRpcProvider).send(method, params)
+				}
+				break;
+			case "eth_getTransactionReceipt":
+				if (!this.config.useRip7560Mode) {
+					throw new RpcError(`Method ${method} is not supported`, -32601);
+				}
+				result = await this.methodHandlerRip7560.getRIP7560TransactionReceipt(params[0]);
+				break;
+			/** EIP-4337 specific RPC API */
+			case "eth_chainId":
+				// eslint-disable-next-line no-case-declarations
+				const { chainId } = await this.provider.getNetwork();
+				result = chainId;
+				break;
+			case "eth_supportedEntryPoints":
+				result = await this.methodHandler.getSupportedEntryPoints();
+				break;
+			case "eth_sendUserOperation":
+				result = await this.methodHandler.sendUserOperation(params[0], params[1]);
+				break;
+			case "eth_estimateUserOperationGas":
+				result = await this.methodHandler.estimateUserOperationGas(params[0], params[1], params[2]);
+				break;
+			case "eth_getUserOperationReceipt":
+				result = await this.methodHandler.getUserOperationReceipt(params[0]);
+				break;
+			case "eth_getUserOperationByHash":
+				result = await this.methodHandler.getUserOperationByHash(params[0]);
+				break;
+			case "web3_clientVersion":
+				result = this.methodHandler.clientVersion();
+				break;
+			case "debug_bundler_clearState":
+				this.debugHandler.clearState();
+				result = "ok";
+				break;
+			case "debug_bundler_dumpMempool":
+				result = await this.debugHandler.dumpMempool();
+				break;
+			case "debug_bundler_clearMempool":
+				this.debugHandler.clearMempool();
+				result = "ok";
+				break;
+			case "debug_bundler_setReputation":
+				this.debugHandler.setReputation(params[0]);
+				result = "ok";
+				break;
+			case "debug_bundler_dumpReputation":
+				result = this.debugHandler.dumpReputation();
+				break;
+			case "debug_bundler_clearReputation":
+				this.debugHandler.clearReputation();
+				result = "ok";
+				break;
+			case "debug_bundler_setBundlingMode":
+				this.debugHandler.setBundlingMode(params[0]);
+				result = "ok";
+				break;
+			case "debug_bundler_setBundleInterval":
+				this.debugHandler.setBundleInterval(params[0], params[1]);
+				result = "ok";
+				break;
+			case "debug_bundler_sendBundleNow":
+				result = await this.debugHandler.sendBundleNow();
+				if (result == null) {
+					result = "ok";
+				}
+				break;
+			case "debug_bundler_getStakeStatus":
+				result = await this.debugHandler.getStakeStatus(params[0], params[1]);
+				break;
+			default:
+				console.log("DEAULT");
+				throw new RpcError(`Method ${method} is not supported`, -32601);
+		}
+		return result;
+	}
+
+	log(...params: any[]): void {
+		if (!this.silent) {
+			console.log(...arguments);
+		}
+	}
 }
