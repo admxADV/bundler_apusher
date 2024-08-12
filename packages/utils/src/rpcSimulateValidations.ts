@@ -1,10 +1,10 @@
-import { packUserOp } from './ERC4337Utils'
-import EntryPointSimulationsJson from '@account-abstraction/contracts/artifacts/EntryPointSimulations.json'
+import { packUserOp } from "./ERC4337Utils";
+import EntryPointSimulationsJson from "@account-abstraction/contracts/artifacts/EntryPointSimulations.json";
 
-import { EntryPointSimulations__factory, IEntryPointSimulations } from './types'
-import { UserOperation } from './interfaces/UserOperation'
+import { EntryPointSimulations__factory, IEntryPointSimulations } from "./types";
+import { UserOperation } from "./interfaces/UserOperation";
 
-export const entryPointSimulationsInterface = EntryPointSimulations__factory.createInterface()
+export const entryPointSimulationsInterface = EntryPointSimulations__factory.createInterface();
 
 /**
  * create the rpc params for eth_call (or debug_traceCall) for simulation method
@@ -13,29 +13,50 @@ export const entryPointSimulationsInterface = EntryPointSimulations__factory.cre
  * @param userOp
  * @param extraOptions optional added tracer settings
  */
-export function simulationRpcParams (methodName: string, entryPointAddress: string, userOp: UserOperation, extraParams: any[] = [], extraOptions: any = {}): any[] {
-  const data = entryPointSimulationsInterface.encodeFunctionData(methodName as any, [packUserOp(userOp), ...extraParams] as any)
-  const tx = {
-    to: entryPointAddress,
-    data
-  }
-  const stateOverride = {
-    [entryPointAddress]: {
-      code: EntryPointSimulationsJson.deployedBytecode
-    }
-  }
-  return [
-    tx,
-    'latest',
-    {
-      ...extraOptions,
-      ...stateOverride
-    }
-  ]
+export function simulationRpcParams(
+	methodName: string,
+	entryPointAddress: string,
+	userOp: UserOperation,
+	extraParams: any[] = [],
+	extraOptions: any = {}
+): any[] {
+	const data = entryPointSimulationsInterface.encodeFunctionData(
+		methodName as any,
+		[packUserOp(userOp), ...extraParams] as any
+	);
+	const tx = {
+		to: entryPointAddress,
+		data,
+	};
+
+	let stateOverride = {};
+
+	if (Object.keys(extraOptions).includes(entryPointAddress))
+		stateOverride = {
+			[entryPointAddress]: {
+				...extraOptions[entryPointAddress],
+				code: EntryPointSimulationsJson.deployedBytecode,
+			},
+		};
+	else
+		stateOverride = {
+			[entryPointAddress]: {
+				code: EntryPointSimulationsJson.deployedBytecode,
+			},
+		};
+
+	return [
+		tx,
+		"latest",
+		{
+			...extraOptions,
+			...stateOverride,
+		},
+	];
 }
 
-export type SimulateHandleUpResult = IEntryPointSimulations.ExecutionResultStructOutput
+export type SimulateHandleUpResult = IEntryPointSimulations.ExecutionResultStructOutput;
 
-export function decodeSimulateHandleOpResult (data: string): SimulateHandleUpResult {
-  return entryPointSimulationsInterface.decodeFunctionResult('simulateHandleOp', data)[0] as SimulateHandleUpResult
+export function decodeSimulateHandleOpResult(data: string): SimulateHandleUpResult {
+	return entryPointSimulationsInterface.decodeFunctionResult("simulateHandleOp", data)[0] as SimulateHandleUpResult;
 }
