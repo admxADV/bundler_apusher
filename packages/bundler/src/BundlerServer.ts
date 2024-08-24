@@ -214,6 +214,9 @@ export class BundlerServer {
 			case "eth_getUserOperationByHash":
 				result = await this.methodHandler.getUserOperationByHash(params[0]);
 				break;
+			case "test_validateUserOperation":
+				result = await this.methodHandler.validateUserOperation(params[0], params[1], params[2]);
+				break;
 			case "web3_clientVersion":
 				result = this.methodHandler.clientVersion();
 				break;

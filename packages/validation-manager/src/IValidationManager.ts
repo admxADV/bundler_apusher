@@ -28,7 +28,7 @@ export interface IValidationManager {
 
   validateInputParameters: (operation: OperationBase, entryPointInput?: string, requireSignature?: boolean, requireGasParams?: boolean) => void
 
-  validateUserOp: (userOp: OperationBase, previousCodeHashes?: ReferencedCodeHashes, checkStakes?: boolean) => Promise<ValidateUserOpResult>
+  validateUserOp: (userOp: OperationBase, previousCodeHashes?: ReferencedCodeHashes, checkStakes?: boolean,	extraOptions?: any ) => Promise<ValidateUserOpResult>
 
   getOperationHash: (userOp: OperationBase) => Promise<string>
 

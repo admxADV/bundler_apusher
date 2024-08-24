@@ -26,6 +26,7 @@ import { ExecutionManager } from "./modules/ExecutionManager";
 import { StateOverride, UserOperationByHashResponse, UserOperationReceipt } from "./RpcTypes";
 import { calcPreVerificationGas } from "@account-abstraction/sdk";
 import { EventFragment } from "@ethersproject/abi";
+import { IValidationManager, ValidateUserOpResult } from "@account-abstraction/validation-manager";
 
 export const HEX_REGEX = /^0x[a-fA-F\d]*$/i;
 
@@ -63,7 +64,8 @@ export class MethodHandlerERC4337 {
 		readonly provider: JsonRpcProvider,
 		readonly signer: Signer,
 		readonly config: BundlerConfig,
-		readonly entryPoint: IEntryPoint
+		readonly entryPoint: IEntryPoint,
+		readonly vm: IValidationManager
 	) {}
 
 	async getSupportedEntryPoints(): Promise<string[]> {
@@ -191,6 +193,22 @@ export class MethodHandlerERC4337 {
 			validUntil,
 			callGasLimit,
 		};
+	}
+
+	async validateUserOperation(
+		userOp: UserOperation,
+		entryPointInput: string,
+		stateOverride: StateOverride
+	): Promise<ValidateUserOpResult> {
+		this.vm.validateInputParameters(userOp, entryPointInput);
+
+		console.log(
+			`Validating UserOperation: Sender=${userOp.sender}  Nonce=${tostr(
+				userOp.nonce
+			)} EntryPoint=${entryPointInput} Paymaster=${userOp.paymaster ?? ""}`
+		);
+
+		return await this.vm.validateUserOp(userOp, undefined, true, stateOverride);
 	}
 
 	async sendUserOperation(userOp: UserOperation, entryPointInput: string): Promise<string> {

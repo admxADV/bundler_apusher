@@ -146,14 +146,15 @@ export async function runBundler(argv: string[], overrideExit = true): Promise<B
 		execManagerConfig.autoBundleInterval = 0;
 	}
 
-	const [execManager, eventsManager, reputationManager, mempoolManager] = initServer(execManagerConfig, wallet);
+	const [execManager, eventsManager, reputationManager, mempoolManager, vm] = initServer(execManagerConfig, wallet);
 	const methodHandler = new MethodHandlerERC4337(
 		execManager,
 		provider,
 		wallet,
 		config,
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		entryPoint!
+		entryPoint!,
+		vm
 	);
 	const methodHandlerRip7560 = new MethodHandlerRIP7560(execManager, wallet.provider as JsonRpcProvider);
 

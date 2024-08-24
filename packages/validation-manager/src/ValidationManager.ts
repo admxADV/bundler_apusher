@@ -114,12 +114,31 @@ export class ValidationManager implements IValidationManager {
 		throw new Error(errorResult.errorName);
 	}
 
-	async _geth_traceCall_SimulateValidation(operation: OperationBase): Promise<[ValidationResult, BundlerTracerResult]> {
+	async _geth_traceCall_SimulateValidation(
+		operation: OperationBase,
+		extraOptions: any = {}
+	): Promise<[ValidationResult, BundlerTracerResult]> {
 		const userOp = operation as UserOperation;
 		const provider = this.entryPoint.provider as JsonRpcProvider;
 		const simulateCall = entryPointSimulations.encodeFunctionData("simulateValidation", [packUserOp(userOp)]);
 
 		const simulationGas = BigNumber.from(userOp.preVerificationGas).add(userOp.verificationGasLimit);
+
+		let stateOverride = {};
+
+		if (Object.keys(extraOptions).includes(this.entryPoint.address))
+			stateOverride = {
+				[this.entryPoint.address]: {
+					...extraOptions[this.entryPoint.address],
+					code: EntryPointSimulationsJson.deployedBytecode,
+				},
+			};
+		else
+			stateOverride = {
+				[this.entryPoint.address]: {
+					code: EntryPointSimulationsJson.deployedBytecode,
+				},
+			};
 
 		const tracerResult: BundlerTracerResult = await debug_traceCall(
 			provider,
@@ -132,9 +151,8 @@ export class ValidationManager implements IValidationManager {
 			{
 				tracer: bundlerCollectorTracer,
 				stateOverrides: {
-					[this.entryPoint.address]: {
-						code: EntryPointSimulationsJson.deployedBytecode,
-					},
+					...extraOptions,
+					...stateOverride,
 				},
 			}
 		);
@@ -148,6 +166,7 @@ export class ValidationManager implements IValidationManager {
 		// if (data === '0x') {
 		//   return [data as any, tracerResult]
 		// }
+
 		try {
 			const [decodedSimulations] = entryPointSimulations.decodeFunctionResult("simulateValidation", data);
 			const validationResult = this.parseValidationResult(userOp, decodedSimulations);
@@ -184,7 +203,8 @@ export class ValidationManager implements IValidationManager {
 	async validateUserOp(
 		operation: OperationBase,
 		previousCodeHashes?: ReferencedCodeHashes,
-		checkStakes = true
+		checkStakes = true,
+		extraOptions: any = {}
 	): Promise<ValidateUserOpResult> {
 		const userOp = operation as UserOperation;
 		if (previousCodeHashes != null && previousCodeHashes.addresses.length > 0) {
@@ -203,10 +223,12 @@ export class ValidationManager implements IValidationManager {
 		};
 		let storageMap: StorageMap = {};
 		if (!this.unsafe) {
+			console.log("VALIDATION");
 			let tracerResult: BundlerTracerResult;
-			[res, tracerResult] = await this._geth_traceCall_SimulateValidation(userOp).catch((e) => {
+			[res, tracerResult] = await this._geth_traceCall_SimulateValidation(userOp, extraOptions).catch((e) => {
 				throw e;
 			});
+
 			let contractAddresses: string[];
 			[contractAddresses, storageMap] = tracerResultParser(userOp, tracerResult, res, this.entryPoint.address);
 			// if no previous contract hashes, then calculate hashes of contracts
@@ -221,6 +243,8 @@ export class ValidationManager implements IValidationManager {
 			res = await this._callSimulateValidation(userOp);
 		}
 
+		console.log(res.returnInfo);
+
 		requireCond(
 			!res.returnInfo.sigFailed,
 			"Invalid UserOp signature or paymaster signature",
@@ -228,6 +252,8 @@ export class ValidationManager implements IValidationManager {
 		);
 
 		const now = Math.floor(Date.now() / 1000);
+
+		console.log(now);
 		requireCond(
 			res.returnInfo.validAfter <= now,
 			`time-range in the future time ${res.returnInfo.validAfter}, now=${now}`,
