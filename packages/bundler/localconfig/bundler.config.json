@@ -1,0 +1,14 @@
+{
+	"gasFactor": "1",
+	"port": "3000",
+	"network": "https://boldest-blissful-vineyard.bsc-testnet.quiknode.pro/",
+	"entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+	"beneficiary": "0x37fB58AC50f491aE39d7c2415786aB96c0D8dA10",
+	"minBalance": "1",
+	"mnemonic": "./localconfig/mnemonic.txt",
+	"maxBundleGas": 5e6,
+	"minStake": "1",
+	"minUnstakeDelay": 0,
+	"autoBundleInterval": 3,
+	"autoBundleMempoolSize": 10
+}
