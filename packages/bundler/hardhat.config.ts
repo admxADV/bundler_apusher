@@ -1,7 +1,7 @@
-import "@nomiclabs/hardhat-ethers";
 import "@nomicfoundation/hardhat-toolbox";
-import "hardhat-deploy";
+import "@nomiclabs/hardhat-ethers";
 import dotenv from "dotenv";
+import "hardhat-deploy";
 dotenv.config();
 
 import fs from "fs";
@@ -35,7 +35,7 @@ const config: HardhatUserConfig = {
 			url: "http://localhost:8545/",
 			saveDeployments: false,
 		},
-		custom: getNetwork(RPC_NODE_BASE_URL + process.env.BSC_RPC_API_KEY),
+		custom: getNetwork(process.env.RPC_ENDPOINT as string),
 	},
 	solidity: {
 		version: "0.8.23",

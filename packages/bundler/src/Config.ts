@@ -1,11 +1,11 @@
-import ow from "ow";
-import fs from "fs";
 import dotenv from "dotenv";
+import fs from "fs";
+import ow from "ow";
 dotenv.config();
 
-import { BundlerConfig, bundlerConfigDefault, BundlerConfigShape } from "./BundlerConfig";
-import { Wallet, Signer } from "ethers";
 import { JsonRpcProvider } from "@ethersproject/providers";
+import { Signer, Wallet } from "ethers";
+import { BundlerConfig, bundlerConfigDefault, BundlerConfigShape } from "./BundlerConfig";
 
 function getCommandLineParams(programOpts: any): Partial<BundlerConfig> {
 	const params: any = {};
@@ -31,8 +31,8 @@ export function getNetworkProvider(url: string): JsonRpcProvider {
 		const infuraId = process.env.INFURA_ID1 ?? DEFAULT_INFURA_ID;
 		url = `https://${url}.infura.io/v3/${infuraId}`;
 	}
-	console.log("url=", url);
-	return new JsonRpcProvider(url + process.env.BSC_RPC_API_KEY);
+	console.log("url=", process.env.RPC_ENDPOINT);
+	return new JsonRpcProvider(process.env.RPC_ENDPOINT);
 }
 
 export async function resolveConfiguration(
