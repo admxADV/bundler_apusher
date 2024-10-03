@@ -1,6 +1,5 @@
 import fs from "fs";
 
-import { Command } from "commander";
 import {
 	deployEntryPoint,
 	erc4337RuntimeVersion,
@@ -8,19 +7,20 @@ import {
 	RpcError,
 	supportsRpcMethod,
 } from "@account-abstraction/utils";
-import { ethers, Wallet, Signer } from "ethers";
+import { Command } from "commander";
+import { ethers, Signer, Wallet } from "ethers";
 
 import { BundlerServer } from "./BundlerServer";
 import { MethodHandlerERC4337 } from "./MethodHandlerERC4337";
 
-import { initServer } from "./modules/initServer";
-import { DebugMethodHandler } from "./DebugMethodHandler";
 import { supportsDebugTraceCall } from "@account-abstraction/validation-manager";
-import { resolveConfiguration } from "./Config";
-import { bundlerConfigDefault } from "./BundlerConfig";
-import { parseEther } from "ethers/lib/utils";
-import { MethodHandlerRIP7560 } from "./MethodHandlerRIP7560";
 import { JsonRpcProvider } from "@ethersproject/providers";
+import { parseEther } from "ethers/lib/utils";
+import { bundlerConfigDefault } from "./BundlerConfig";
+import { resolveConfiguration } from "./Config";
+import { DebugMethodHandler } from "./DebugMethodHandler";
+import { MethodHandlerRIP7560 } from "./MethodHandlerRIP7560";
+import { initServer } from "./modules/initServer";
 
 // this is done so that console.log outputs BigNumber as hex string instead of unreadable object
 export const inspectCustomSymbol = Symbol.for("nodejs.util.inspect.custom");
@@ -76,6 +76,7 @@ export async function runBundler(argv: string[], overrideExit = true): Promise<B
 		.option("--mnemonic <file>", "mnemonic/private-key file of signer account")
 		.option("--entryPoint <string>", "address of the supported EntryPoint contract")
 		.option("--port <number>", `server listening port (default: ${bundlerConfigDefault.port})`)
+		.option("--host <string>", "server host", "localhost")
 		.option("--config <string>", "path to config file", CONFIG_FILE_NAME)
 		.option("--auto", "automatic bundling (bypass config.autoBundleMempoolSize)", false)
 		.option("--unsafe", "UNSAFE mode: no storage or opcode checks (safe mode requires geth)")
@@ -186,7 +187,7 @@ export async function runBundler(argv: string[], overrideExit = true): Promise<B
 				};
 			})
 		);
-		console.log(`running on http://localhost:${config.port}/rpc`);
+		console.log(`running on http://${config.host}:${config.port}/rpc`);
 	});
 
 	return bundlerServer;
