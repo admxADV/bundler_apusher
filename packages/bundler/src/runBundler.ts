@@ -187,7 +187,7 @@ export async function runBundler(argv: string[], overrideExit = true): Promise<B
 				};
 			})
 		);
-		console.log(`running on http://${config.host}:${config.port}/rpc`);
+		console.log(`running on https://${config.host}:${config.port}/rpc`);
 	});
 
 	return bundlerServer;

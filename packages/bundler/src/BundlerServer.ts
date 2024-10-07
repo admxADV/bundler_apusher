@@ -4,8 +4,8 @@ import cors from "cors";
 import { Signer, utils } from "ethers";
 import { parseEther } from "ethers/lib/utils";
 import express, { Express, Request, Response } from "express";
-import { createServer } from "https";
 import { readFileSync } from "fs"; // Для чтения сертификатов
+import { createServer, Server } from "https";
 
 import {
 	AddressZero,
@@ -24,12 +24,13 @@ import { MethodHandlerERC4337 } from "./MethodHandlerERC4337";
 import { MethodHandlerRIP7560 } from "./MethodHandlerRIP7560";
 
 import Debug from "debug";
+import path from "path";
 
 const debug = Debug("aa.rpc");
 
 export class BundlerServer {
 	app: Express;
-	private readonly httpsServer: any;
+	private readonly httpsServer: Server;
 	public silent = false;
 
 	constructor(
@@ -51,18 +52,14 @@ export class BundlerServer {
 		this.app.post("/rpc", this.rpc.bind(this));
 
 		const options = {
-			key: readFileSync("ssl/key.pem"),
-			cert: readFileSync("ssl/cert.pem"),
+			key: readFileSync(path.resolve(__dirname, "./ssl/key.pem")),
+			cert: readFileSync(path.resolve(__dirname, "./ssl/cert.pem")),
 		};
 
 		this.httpsServer = createServer(options, this.app);
 
-		this.httpsServer.listen(3000, () => {
+		this.httpsServer.listen({ port: config.port, host: config.host }, () => {
 			console.log("Server is running on port 3000 (HTTPS)");
-		});
-
-		this.httpsServer.listen(8454, () => {
-			console.log("Server is running on port 8454 (HTTPS)");
 		});
 
 		this.startingPromise = this._preflightCheck();
@@ -107,7 +104,9 @@ export class BundlerServer {
 			console.log(resp);
 		} catch (e: any) {
 			this.fatal(
-				`Invalid entryPoint contract at ${this.config.entryPoint}. wrong version? ${decodeRevertReason(e, false) as string}`
+				`Invalid entryPoint contract at ${this.config.entryPoint}. wrong version? ${
+					decodeRevertReason(e, false) as string
+				}`
 			);
 		}
 
