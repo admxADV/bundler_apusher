@@ -1,32 +1,32 @@
-import { BigNumber, BigNumberish, Signer } from "ethers";
 import { JsonRpcProvider, Log } from "@ethersproject/providers";
+import { BigNumber, BigNumberish, Signer } from "ethers";
 
-import { BundlerConfig } from "./BundlerConfig";
+import { calcPreVerificationGas } from "@account-abstraction/sdk";
 import {
-	RpcError,
-	ValidationErrors,
-	requireAddressAndFields,
-	packUserOp,
-	PackedUserOperation,
-	unpackUserOp,
-	simulationRpcParams,
-	decodeSimulateHandleOpResult,
 	AddressZero,
 	decodeRevertReason,
-	mergeValidationDataValues,
-	UserOperationEventEvent,
-	IEntryPoint,
-	requireCond,
+	decodeSimulateHandleOpResult,
 	deepHexlify,
-	tostr,
 	erc4337RuntimeVersion,
+	IEntryPoint,
+	mergeValidationDataValues,
+	PackedUserOperation,
+	packUserOp,
+	requireAddressAndFields,
+	requireCond,
+	RpcError,
+	simulationRpcParams,
+	tostr,
+	unpackUserOp,
 	UserOperation,
+	UserOperationEventEvent,
+	ValidationErrors,
 } from "@account-abstraction/utils";
+import { IValidationManager, ValidateUserOpResult } from "@account-abstraction/validation-manager";
+import { EventFragment } from "@ethersproject/abi";
+import { BundlerConfig } from "./BundlerConfig";
 import { ExecutionManager } from "./modules/ExecutionManager";
 import { StateOverride, UserOperationByHashResponse, UserOperationReceipt } from "./RpcTypes";
-import { calcPreVerificationGas } from "@account-abstraction/sdk";
-import { EventFragment } from "@ethersproject/abi";
-import { IValidationManager, ValidateUserOpResult } from "@account-abstraction/validation-manager";
 
 export const HEX_REGEX = /^0x[a-fA-F\d]*$/i;
 
@@ -180,7 +180,7 @@ export class MethodHandlerERC4337 {
 			})
 			.then((b) => b.toNumber())
 			.catch((err) => {
-				const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted";
+				const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted " + err.message;
 				throw new RpcError(message, ValidationErrors.UserOperationReverted);
 			});
 
