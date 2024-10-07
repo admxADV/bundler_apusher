@@ -1,29 +1,29 @@
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { assert, expect } from "chai";
-import { ethers } from "hardhat";
 import { parseEther } from "ethers/lib/utils";
+import { ethers } from "hardhat";
 
-import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
 import {
 	AddressZero,
+	deployEntryPoint,
+	DeterministicDeployer,
 	getUserOpHash,
+	IEntryPoint,
 	packUserOp,
 	UserOperation,
-	deployEntryPoint,
-	IEntryPoint,
-	DeterministicDeployer,
 } from "@account-abstraction/utils";
+import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
 
-import { ValidationManager, supportsDebugTraceCall } from "@account-abstraction/validation-manager";
-import { MempoolManager } from "../src/modules/MempoolManager";
-import { BundleManager } from "../src/modules/BundleManager";
+import { supportsDebugTraceCall, ValidationManager } from "@account-abstraction/validation-manager";
 import { BundlerConfig } from "../src/BundlerConfig";
-import { TestFakeWalletToken__factory } from "../src/types";
 import { MethodHandlerERC4337 } from "../src/MethodHandlerERC4337";
-import { ExecutionManager } from "../src/modules/ExecutionManager";
-import { EventsManager } from "../src/modules/EventsManager";
-import { createSigner } from "./testUtils";
+import { BundleManager } from "../src/modules/BundleManager";
 import { DepositManager } from "../src/modules/DepositManager";
+import { EventsManager } from "../src/modules/EventsManager";
+import { ExecutionManager } from "../src/modules/ExecutionManager";
+import { MempoolManager } from "../src/modules/MempoolManager";
+import { TestFakeWalletToken__factory } from "../src/types";
+import { createSigner } from "./testUtils";
 
 describe("#BundlerManager", () => {
 	let bm: BundleManager;
@@ -45,7 +45,8 @@ describe("#BundlerManager", () => {
 			minBalance: "0",
 			mnemonic: "",
 			network: "",
-			port: "3000",
+			port: 3000,
+			host: "localhost",
 			unsafe: !(await supportsDebugTraceCall(provider as any, false)),
 			autoBundleInterval: 0,
 			autoBundleMempoolSize: 0,
@@ -113,7 +114,8 @@ describe("#BundlerManager", () => {
 				minBalance: "0",
 				mnemonic: "",
 				network: "",
-				port: "3000",
+				port: 3000,
+				host: "localhost",
 				unsafe: !(await supportsDebugTraceCall(provider as any, false)),
 				conditionalRpc: false,
 				autoBundleInterval: 0,

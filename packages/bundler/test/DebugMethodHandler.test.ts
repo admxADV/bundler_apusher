@@ -1,9 +1,9 @@
-import { ethers } from "hardhat";
 import { SimpleAccountAPI } from "@account-abstraction/sdk";
+import { JsonRpcProvider } from "@ethersproject/providers";
+import { expect } from "chai";
 import { Signer, Wallet } from "ethers";
 import { parseEther } from "ethers/lib/utils";
-import { expect } from "chai";
-import { JsonRpcProvider } from "@ethersproject/providers";
+import { ethers } from "hardhat";
 
 import {
 	DeterministicDeployer,
@@ -14,17 +14,17 @@ import {
 } from "@account-abstraction/utils";
 import { ValidationManager, supportsDebugTraceCall } from "@account-abstraction/validation-manager";
 
-import { DebugMethodHandler } from "../src/DebugMethodHandler";
-import { ExecutionManager } from "../src/modules/ExecutionManager";
-import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
 import { BundlerConfig } from "../src/BundlerConfig";
-import { MempoolManager } from "../src/modules/MempoolManager";
-import { BundleManager, SendBundleReturn } from "../src/modules/BundleManager";
+import { DebugMethodHandler } from "../src/DebugMethodHandler";
 import { MethodHandlerERC4337 } from "../src/MethodHandlerERC4337";
+import { BundleManager, SendBundleReturn } from "../src/modules/BundleManager";
+import { ExecutionManager } from "../src/modules/ExecutionManager";
+import { MempoolManager } from "../src/modules/MempoolManager";
+import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
 
-import { createSigner } from "./testUtils";
-import { EventsManager } from "../src/modules/EventsManager";
 import { DepositManager } from "../src/modules/DepositManager";
+import { EventsManager } from "../src/modules/EventsManager";
+import { createSigner } from "./testUtils";
 
 const provider = ethers.provider;
 
@@ -50,7 +50,8 @@ describe("#DebugMethodHandler", () => {
 			minBalance: "0",
 			mnemonic: "",
 			network: "",
-			port: "3000",
+			port: 3000,
+			host: "localhost",
 			unsafe: !(await supportsDebugTraceCall(provider as any, false)),
 			conditionalRpc: false,
 			autoBundleInterval: 0,

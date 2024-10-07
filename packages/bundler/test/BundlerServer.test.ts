@@ -1,21 +1,21 @@
 import { JsonRpcProvider } from "@ethersproject/providers";
-import { ethers } from "hardhat";
 import { expect } from "chai";
 import { parseEther } from "ethers/lib/utils";
+import { ethers } from "hardhat";
 
-import { AddressZero, IEntryPoint, UserOperation, deepHexlify, deployEntryPoint } from "@account-abstraction/utils";
+import { AddressZero, deepHexlify, deployEntryPoint, IEntryPoint, UserOperation } from "@account-abstraction/utils";
 import { supportsDebugTraceCall, ValidationManager } from "@account-abstraction/validation-manager";
 
-import { BundlerServer } from "../src/BundlerServer";
-import { createSigner } from "./testUtils";
-import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
-import { MempoolManager } from "../src/modules/MempoolManager";
-import { EventsManager } from "../src/modules/EventsManager";
-import { BundleManager } from "../src/modules/BundleManager";
-import { ExecutionManager } from "../src/modules/ExecutionManager";
-import { MethodHandlerERC4337 } from "../src/MethodHandlerERC4337";
 import { BundlerConfig } from "../src/BundlerConfig";
+import { BundlerServer } from "../src/BundlerServer";
+import { MethodHandlerERC4337 } from "../src/MethodHandlerERC4337";
+import { BundleManager } from "../src/modules/BundleManager";
 import { DepositManager } from "../src/modules/DepositManager";
+import { EventsManager } from "../src/modules/EventsManager";
+import { ExecutionManager } from "../src/modules/ExecutionManager";
+import { MempoolManager } from "../src/modules/MempoolManager";
+import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
+import { createSigner } from "./testUtils";
 
 describe("BundleServer", function () {
 	let entryPoint: IEntryPoint;
@@ -32,7 +32,8 @@ describe("BundleServer", function () {
 			minBalance: "0",
 			mnemonic: "",
 			network: "",
-			port: "3000",
+			port: 3000,
+			host: "localhost",
 			unsafe: !(await supportsDebugTraceCall(provider as any, false)),
 			conditionalRpc: false,
 			autoBundleInterval: 0,

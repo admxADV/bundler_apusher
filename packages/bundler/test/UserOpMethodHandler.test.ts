@@ -4,12 +4,7 @@ import { parseEther, resolveProperties } from "ethers/lib/utils";
 
 import { BundlerConfig } from "../src/BundlerConfig";
 
-import { toHex } from "hardhat/internal/util/bigint";
-import { Signer, Wallet } from "ethers";
 import { SimpleAccountAPI } from "@account-abstraction/sdk";
-import { postExecutionDump } from "@account-abstraction/utils/dist/src/postExecCheck";
-import { SampleRecipient, TestRulesAccount, TestRulesAccount__factory } from "../src/types";
-import { ValidationManager, supportsDebugTraceCall } from "@account-abstraction/validation-manager";
 import {
 	deployEntryPoint,
 	DeterministicDeployer,
@@ -21,16 +16,21 @@ import {
 	UserOperationEventEvent,
 	waitFor,
 } from "@account-abstraction/utils";
-import { UserOperationReceipt } from "../src/RpcTypes";
-import { ExecutionManager } from "../src/modules/ExecutionManager";
-import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
-import { MempoolManager } from "../src/modules/MempoolManager";
-import { BundleManager } from "../src/modules/BundleManager";
-import { MethodHandlerERC4337 } from "../src/MethodHandlerERC4337";
+import { postExecutionDump } from "@account-abstraction/utils/dist/src/postExecCheck";
+import { supportsDebugTraceCall, ValidationManager } from "@account-abstraction/validation-manager";
+import { Signer, Wallet } from "ethers";
 import { ethers } from "hardhat";
-import { createSigner } from "./testUtils";
-import { EventsManager } from "../src/modules/EventsManager";
+import { toHex } from "hardhat/internal/util/bigint";
+import { MethodHandlerERC4337 } from "../src/MethodHandlerERC4337";
+import { UserOperationReceipt } from "../src/RpcTypes";
+import { BundleManager } from "../src/modules/BundleManager";
 import { DepositManager } from "../src/modules/DepositManager";
+import { EventsManager } from "../src/modules/EventsManager";
+import { ExecutionManager } from "../src/modules/ExecutionManager";
+import { MempoolManager } from "../src/modules/MempoolManager";
+import { BundlerReputationParams, ReputationManager } from "../src/modules/ReputationManager";
+import { SampleRecipient, TestRulesAccount, TestRulesAccount__factory } from "../src/types";
+import { createSigner } from "./testUtils";
 
 describe("UserOpMethodHandler", function () {
 	const helloWorld = "hello world";
@@ -66,7 +66,8 @@ describe("UserOpMethodHandler", function () {
 			minBalance: "0",
 			mnemonic: "",
 			network: "",
-			port: "3000",
+			port: 3000,
+			host: "localhost",
 			unsafe: !(await supportsDebugTraceCall(provider as any, false)),
 			conditionalRpc: false,
 			autoBundleInterval: 0,
