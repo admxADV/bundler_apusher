@@ -4,7 +4,8 @@ import cors from "cors";
 import { Signer, utils } from "ethers";
 import { parseEther } from "ethers/lib/utils";
 import express, { Express, Request, Response } from "express";
-import { Server } from "http";
+import { createServer } from "https";
+import { readFileSync } from "fs"; // Для чтения сертификатов
 
 import {
 	AddressZero,
@@ -25,9 +26,10 @@ import { MethodHandlerRIP7560 } from "./MethodHandlerRIP7560";
 import Debug from "debug";
 
 const debug = Debug("aa.rpc");
+
 export class BundlerServer {
 	app: Express;
-	private readonly httpServer: Server;
+	private readonly httpsServer: any;
 	public silent = false;
 
 	constructor(
@@ -48,7 +50,21 @@ export class BundlerServer {
 		// eslint-disable-next-line @typescript-eslint/no-misused-promises
 		this.app.post("/rpc", this.rpc.bind(this));
 
-		this.httpServer = this.app.listen(this.config.port, this.config.host);
+		const options = {
+			key: readFileSync("ssl/key.pem"),
+			cert: readFileSync("ssl/cert.pem"),
+		};
+
+		this.httpsServer = createServer(options, this.app);
+
+		this.httpsServer.listen(3000, () => {
+			console.log("Server is running on port 3000 (HTTPS)");
+		});
+
+		this.httpsServer.listen(8454, () => {
+			console.log("Server is running on port 8454 (HTTPS)");
+		});
+
 		this.startingPromise = this._preflightCheck();
 	}
 
@@ -59,7 +75,7 @@ export class BundlerServer {
 	}
 
 	async stop(): Promise<void> {
-		this.httpServer.close();
+		this.httpsServer.close();
 	}
 
 	async _preflightCheck(): Promise<void> {
@@ -83,7 +99,6 @@ export class BundlerServer {
 			maxPriorityFeePerGas: 0,
 			signature: "0x",
 		};
-		// await EntryPoint__factory.connect(this.config.entryPoint,this.provider).callStatic.addStake(0)
 		try {
 			const resp = await IEntryPoint__factory.connect(this.config.entryPoint, this.provider).callStatic.getUserOpHash(
 				packUserOp(emptyUserOp)
@@ -92,9 +107,7 @@ export class BundlerServer {
 			console.log(resp);
 		} catch (e: any) {
 			this.fatal(
-				`Invalid entryPoint contract at ${this.config.entryPoint}. wrong version? ${
-					decodeRevertReason(e, false) as string
-				}`
+				`Invalid entryPoint contract at ${this.config.entryPoint}. wrong version? ${decodeRevertReason(e, false) as string}`
 			);
 		}
 
@@ -153,9 +166,7 @@ export class BundlerServer {
 				result,
 			};
 		} catch (err: any) {
-			// Try unwrapping RPC error codes wrapped by the Ethers.js library
 			if (err?.error instanceof Error) {
-				// eslint-disable-next-line no-ex-assign
 				err = err.error;
 			}
 			const error = {
@@ -176,15 +187,12 @@ export class BundlerServer {
 	async handleMethod(method: string, params: any[]): Promise<any> {
 		let result: any;
 		switch (method) {
-			/** RIP-7560 specific RPC API */
 			case "eth_sendTransaction":
 				if (!this.config.useRip7560Mode) {
 					throw new RpcError(`Method ${method} is not supported`, -32601);
 				}
 				if (params[0].sender != null) {
 					result = await this.methodHandlerRip7560.sendRIP7560Transaction(params[0]);
-					// } else {
-					//   result = await (this.provider as JsonRpcProvider).send(method, params)
 				}
 				break;
 			case "eth_getTransactionReceipt":
@@ -193,9 +201,7 @@ export class BundlerServer {
 				}
 				result = await this.methodHandlerRip7560.getRIP7560TransactionReceipt(params[0]);
 				break;
-			/** EIP-4337 specific RPC API */
 			case "eth_chainId":
-				// eslint-disable-next-line no-case-declarations
 				const { chainId } = await this.provider.getNetwork();
 				result = chainId;
 				break;
@@ -260,7 +266,6 @@ export class BundlerServer {
 				result = await this.debugHandler.getStakeStatus(params[0], params[1]);
 				break;
 			default:
-				console.log("DEAULT");
 				throw new RpcError(`Method ${method} is not supported`, -32601);
 		}
 		return result;
