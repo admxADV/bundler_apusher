@@ -180,7 +180,7 @@ export class MethodHandlerERC4337 {
 			})
 			.then((b) => b.toNumber())
 			.catch((err) => {
-				const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted " + err.message;
+				const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted " + JSON.stringify(err);
 				throw new RpcError(message, ValidationErrors.UserOperationReverted);
 			});
 
