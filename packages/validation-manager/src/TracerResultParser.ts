@@ -6,20 +6,20 @@ import { BigNumber, BigNumberish } from 'ethers'
 import { hexZeroPad, Interface, keccak256 } from 'ethers/lib/utils'
 import { inspect } from 'util'
 
-import { BundlerTracerResult } from './BundlerCollectorTracer'
 import {
   IEntryPoint__factory,
   IPaymaster__factory,
+  mapOf,
   OperationBase,
+  requireCond,
   RpcError,
   SenderCreator__factory,
   StakeInfo,
   StorageMap,
-  ValidationErrors,
-  mapOf,
-  requireCond,
-  toBytes32
+  toBytes32,
+  ValidationErrors
 } from '@account-abstraction/utils'
+import { BundlerTracerResult } from './BundlerCollectorTracer'
 
 import { ValidationResult } from './IValidationManager'
 
@@ -394,7 +394,7 @@ export function tracerResultParser (
 
     // check if the given entity is staked
     function isStaked (entStake?: StakeInfo): boolean {
-      return entStake != null && BigNumber.from(1).lte(entStake.stake) && BigNumber.from(1).lte(entStake.unstakeDelaySec)
+      return entStake != null && BigNumber.from(0).lte(entStake.stake) && BigNumber.from(0).lte(entStake.unstakeDelaySec)
     }
 
     // helper method: if condition is true, then entity must be staked.
