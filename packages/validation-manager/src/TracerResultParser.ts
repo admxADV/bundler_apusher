@@ -388,7 +388,8 @@ export function tracerResultParser(
 					if (userOp.factory != null) {
 						// special case: account.validateUserOp is allowed to use assoc storage if factory is staked.
 						// [STO-022], [STO-021]
-						console.log("[STO-022], [STO-021]");
+						
+            
 						if (
 							!(
 								entityAddress.toLowerCase() === sender.toLowerCase() &&
@@ -396,6 +397,8 @@ export function tracerResultParser(
 							)
 						) {
 							requireStakeSlot = slot;
+              console.log("[STO-022], [STO-021]");
+              console.log(`unstaked ${entityTitle} accessed ${nameAddr(addr, entityTitle)} slot ${slot} \n`)
 						}
 					}
 				} else if (associatedWith(slot, entityAddress, entitySlots)) {
@@ -403,15 +406,18 @@ export function tracerResultParser(
 					// accessing a slot associated with entityAddr (e.g. token.balanceOf(paymaster)
 					console.log("[STO-032]");
 					requireStakeSlot = slot;
+          console.log(`unstaked ${entityTitle} accessed ${nameAddr(addr, entityTitle)} slot ${slot} \n`)
 				} else if (addr.toLowerCase() === entityAddress.toLowerCase()) {
 					// [STO-031]
 					// accessing storage member of entity itself requires stake.
 					console.log("[STO-031]");
 					requireStakeSlot = slot;
+          console.log(`unstaked ${entityTitle} accessed ${nameAddr(addr, entityTitle)} slot ${slot} \n`)
 				} else if (writes[slot] == null && transientWrites[slot] == null) {
 					// [STO-033]: staked entity have read-only access to any storage in non-entity contract.
 					console.log("[STO-033]");
 					requireStakeSlot = slot;
+          console.log(`unstaked ${entityTitle} accessed ${nameAddr(addr, entityTitle)} slot ${slot} \n`)
 				} else {
 					// accessing arbitrary storage of another contract is not allowed
 					const isWrite = Object.keys(writes).includes(slot) || Object.keys(transientWrites ?? {}).includes(slot);
