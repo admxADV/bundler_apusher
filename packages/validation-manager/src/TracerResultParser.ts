@@ -1,52 +1,50 @@
 // This file contains references to validation rules, in the format [xxx-###]
 // where xxx is OP/STO/COD/EP/SREP/EREP/UREP/ALT, and ### is a number
 // the validation rules are defined in erc-aa-validation.md
-import Debug from 'debug'
-import { BigNumber, BigNumberish } from 'ethers'
-import { hexZeroPad, Interface, keccak256 } from 'ethers/lib/utils'
-import { inspect } from 'util'
+import Debug from "debug";
+import { BigNumber, BigNumberish } from "ethers";
+import { hexZeroPad, Interface, keccak256 } from "ethers/lib/utils";
+import { inspect } from "util";
 
 import {
-  IEntryPoint__factory,
-  IPaymaster__factory,
-  mapOf,
-  OperationBase,
-  requireCond,
-  RpcError,
-  SenderCreator__factory,
-  StakeInfo,
-  StorageMap,
-  toBytes32,
-  ValidationErrors
-} from '@account-abstraction/utils'
-import { BundlerTracerResult } from './BundlerCollectorTracer'
+	IEntryPoint__factory,
+	IPaymaster__factory,
+	mapOf,
+	OperationBase,
+	requireCond,
+	RpcError,
+	SenderCreator__factory,
+	StakeInfo,
+	StorageMap,
+	toBytes32,
+	ValidationErrors,
+} from "@account-abstraction/utils";
+import { BundlerTracerResult } from "./BundlerCollectorTracer";
 
-import { ValidationResult } from './IValidationManager'
+import { ValidationResult } from "./IValidationManager";
 
-const debug = Debug('aa.handler.opcodes')
+const debug = Debug("aa.handler.opcodes");
 
 interface CallEntry {
-  to: string
-  from: string
-  type: string // call opcode
-  method: string // parsed method, or signash if unparsed
-  revert?: any // parsed output from REVERT
-  return?: any // parsed method output.
-  value?: BigNumberish
+	to: string;
+	from: string;
+	type: string; // call opcode
+	method: string; // parsed method, or signash if unparsed
+	revert?: any; // parsed output from REVERT
+	return?: any; // parsed method output.
+	value?: BigNumberish;
 }
 
-const abi = Object.values([
-  ...SenderCreator__factory.abi,
-  ...IEntryPoint__factory.abi,
-  ...IPaymaster__factory.abi
-].reduce((set, entry) => {
-  const key = `${entry.name}(${entry.inputs.map(i => i.type).join(',')})`
-  // console.log('key=', key, keccak256(Buffer.from(key)).slice(0,10))
-  return {
-    ...set,
-    [key]: entry
-  }
-}, {})) as any
+const abi = Object.values(
+	[...SenderCreator__factory.abi, ...IEntryPoint__factory.abi, ...IPaymaster__factory.abi].reduce((set, entry) => {
+		const key = `${entry.name}(${entry.inputs.map((i) => i.type).join(",")})`;
+		// console.log('key=', key, keccak256(Buffer.from(key)).slice(0,10))
+		return {
+			...set,
+			[key]: entry,
+		};
+	}, {})
+) as any;
 
 /**
  * parse all call operation in the trace.
@@ -55,70 +53,68 @@ const abi = Object.values([
  * - last entry is top-level return from "simulateValidation". it as ret and rettype, but no type or address
  * @param tracerResults
  */
-function parseCallStack (
-  tracerResults: BundlerTracerResult
-): CallEntry[] {
-  const xfaces = new Interface(abi)
+function parseCallStack(tracerResults: BundlerTracerResult): CallEntry[] {
+	const xfaces = new Interface(abi);
 
-  function callCatch<T, T1> (x: () => T, def: T1): T | T1 {
-    try {
-      return x()
-    } catch {
-      return def
-    }
-  }
+	function callCatch<T, T1>(x: () => T, def: T1): T | T1 {
+		try {
+			return x();
+		} catch {
+			return def;
+		}
+	}
 
-  const out: CallEntry[] = []
-  const stack: any[] = []
-  tracerResults.calls
-    .filter(x => !x.type.startsWith('depth'))
-    .forEach(c => {
-      if (c.type.match(/REVERT|RETURN/) != null) {
-        const top = stack.splice(-1)[0] ?? {
-          type: 'top',
-          method: 'validateUserOp'
-        }
-        const returnData: string = (c as any).data
-        if (top.type.match(/CREATE/) != null) {
-          out.push({
-            to: top.to,
-            from: top.from,
-            type: top.type,
-            method: '',
-            return: `len=${returnData.length}`
-          })
-        } else {
-          const method = callCatch(() => xfaces.getFunction(top.method), top.method)
-          if (c.type === 'REVERT') {
-            const parsedError = callCatch(() => xfaces.parseError(returnData), returnData)
-            out.push({
-              to: top.to,
-              from: top.from,
-              type: top.type,
-              method: method.name,
-              value: top.value,
-              revert: parsedError
-            })
-          } else {
-            const ret = callCatch(() => xfaces.decodeFunctionResult(method, returnData), returnData)
-            out.push({
-              to: top.to,
-              from: top.from,
-              type: top.type,
-              value: top.value,
-              method: method.name ?? method,
-              return: ret
-            })
-          }
-        }
-      } else {
-        stack.push(c)
-      }
-    })
+	const out: CallEntry[] = [];
+	const stack: any[] = [];
+	tracerResults.calls
+		.filter((x) => !x.type.startsWith("depth"))
+		.forEach((c) => {
+			if (c.type.match(/REVERT|RETURN/) != null) {
+				const top = stack.splice(-1)[0] ?? {
+					type: "top",
+					method: "validateUserOp",
+				};
+				const returnData: string = (c as any).data;
+				if (top.type.match(/CREATE/) != null) {
+					out.push({
+						to: top.to,
+						from: top.from,
+						type: top.type,
+						method: "",
+						return: `len=${returnData.length}`,
+					});
+				} else {
+					const method = callCatch(() => xfaces.getFunction(top.method), top.method);
+					if (c.type === "REVERT") {
+						const parsedError = callCatch(() => xfaces.parseError(returnData), returnData);
+						out.push({
+							to: top.to,
+							from: top.from,
+							type: top.type,
+							method: method.name,
+							value: top.value,
+							revert: parsedError,
+						});
+					} else {
+						const ret = callCatch(() => xfaces.decodeFunctionResult(method, returnData), returnData);
+						out.push({
+							to: top.to,
+							from: top.from,
+							type: top.type,
+							value: top.value,
+							method: method.name ?? method,
+							return: ret,
+						});
+					}
+				}
+			} else {
+				stack.push(c);
+			}
+		});
 
-  // TODO: verify that stack is empty at the end.
+	// TODO: verify that stack is empty at the end.
 
-  return out
+	return out;
 }
 
 /**
@@ -129,38 +125,41 @@ function parseCallStack (
  * @param stakeInfoEntities stake info for (factory, account, paymaster). factory and paymaster can be null.
  * @param keccak array of buffers that were given to keccak in the transaction
  */
-function parseEntitySlots (stakeInfoEntities: { [addr: string]: StakeInfo | undefined }, keccak: string[]): {
-  [addr: string]: Set<string>
+function parseEntitySlots(
+	stakeInfoEntities: { [addr: string]: StakeInfo | undefined },
+	keccak: string[]
+): {
+	[addr: string]: Set<string>;
 } {
-  // for each entity (sender, factory, paymaster), hold the valid slot addresses
-  // valid: the slot was generated by keccak(entity || ...)
-  const entitySlots: { [addr: string]: Set<string> } = {}
+	// for each entity (sender, factory, paymaster), hold the valid slot addresses
+	// valid: the slot was generated by keccak(entity || ...)
+	const entitySlots: { [addr: string]: Set<string> } = {};
 
-  keccak.forEach(k => {
-    Object.values(stakeInfoEntities).forEach(info => {
-      const addr = info?.addr?.toLowerCase()
-      if (addr == null) return
-      const addrPadded = toBytes32(addr)
-      if (entitySlots[addr] == null) {
-        entitySlots[addr] = new Set<string>()
-      }
+	keccak.forEach((k) => {
+		Object.values(stakeInfoEntities).forEach((info) => {
+			const addr = info?.addr?.toLowerCase();
+			if (addr == null) return;
+			const addrPadded = toBytes32(addr);
+			if (entitySlots[addr] == null) {
+				entitySlots[addr] = new Set<string>();
+			}
 
-      const currentEntitySlots = entitySlots[addr]
+			const currentEntitySlots = entitySlots[addr];
 
-      // valid slot: the slot was generated by keccak(entityAddr || ...)
-      if (k.startsWith(addrPadded)) {
-        // console.log('added mapping (balance) slot', value)
-        currentEntitySlots.add(keccak256(k))
-      }
-      // disabled 2nd rule: .. or by keccak( ... || OWN) where OWN is previous allowed slot
-      // if (k.length === 130 && currentEntitySlots.has(k.slice(-64))) {
-      //   // console.log('added double-mapping (allowance) slot', value)
-      //   currentEntitySlots.add(value)
-      // }
-    })
-  })
+			// valid slot: the slot was generated by keccak(entityAddr || ...)
+			if (k.startsWith(addrPadded)) {
+				// console.log('added mapping (balance) slot', value)
+				currentEntitySlots.add(keccak256(k));
+			}
+			// disabled 2nd rule: .. or by keccak( ... || OWN) where OWN is previous allowed slot
+			// if (k.length === 130 && currentEntitySlots.has(k.slice(-64))) {
+			//   // console.log('added double-mapping (allowance) slot', value)
+			//   currentEntitySlots.add(value)
+			// }
+		});
+	});
 
-  return entitySlots
+	return entitySlots;
 }
 
 //
@@ -177,16 +176,19 @@ function parseEntitySlots (stakeInfoEntities: { [addr: string]: StakeInfo | unde
 //   paymaster: '0xe0e6183a',
 // }
 
-function getEntityTitle (userOp: OperationBase, entityAddress: string): string {
-  if (userOp.sender.toLowerCase() === entityAddress.toLowerCase()) {
-    return 'account'
-  } else if (userOp.factory?.toLowerCase() === entityAddress.toLowerCase()) {
-    return 'factory'
-  } else if (userOp.paymaster?.toLowerCase() === entityAddress.toLowerCase()) {
-    return 'paymaster'
-  } else {
-    throw new RpcError(`could not find entity name for address ${entityAddress}. This should not happen. This is a bug.`, 0)
-  }
+function getEntityTitle(userOp: OperationBase, entityAddress: string): string {
+	if (userOp.sender.toLowerCase() === entityAddress.toLowerCase()) {
+		return "account";
+	} else if (userOp.factory?.toLowerCase() === entityAddress.toLowerCase()) {
+		return "factory";
+	} else if (userOp.paymaster?.toLowerCase() === entityAddress.toLowerCase()) {
+		return "paymaster";
+	} else {
+		throw new RpcError(
+			`could not find entity name for address ${entityAddress}. This should not happen. This is a bug.`,
+			0
+		);
+	}
 }
 
 /**
@@ -197,254 +199,315 @@ function getEntityTitle (userOp: OperationBase, entityAddress: string): string {
  * @param entryPointAddress the entryPoint that hosted the "simulatedValidation" traced call.
  * @return list of contract addresses referenced by this UserOp
  */
-export function tracerResultParser (
-  userOp: OperationBase,
-  tracerResults: BundlerTracerResult,
-  validationResult: ValidationResult,
-  entryPointAddress: string
+export function tracerResultParser(
+	userOp: OperationBase,
+	tracerResults: BundlerTracerResult,
+	validationResult: ValidationResult,
+	entryPointAddress: string
 ): [string[], StorageMap] {
-  debug('=== simulation result:', inspect(tracerResults, true, 10, true))
-  // todo: block access to no-code addresses (might need update to tracer)
+	debug("=== simulation result:", inspect(tracerResults, true, 10, true));
+	// todo: block access to no-code addresses (might need update to tracer)
 
-  // opcodes from [OP-011]
-  const bannedOpCodes = new Set(['GASPRICE', 'GASLIMIT', 'DIFFICULTY', 'TIMESTAMP', 'BASEFEE', 'BLOCKHASH', 'NUMBER', 'ORIGIN', 'GAS', 'CREATE', 'COINBASE', 'SELFDESTRUCT', 'RANDOM', 'PREVRANDAO', 'INVALID'])
-  // opcodes allowed in staked entities [OP-080]
-  const opcodesOnlyInStakedEntities = new Set(['BALANCE', 'SELFBALANCE'])
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  if (Object.values(tracerResults.callsFromEntryPoint).length < 1) {
-    throw new Error('Unexpected traceCall result: no calls from entrypoint.')
-  }
-  if (tracerResults.calls != null) {
-    const callStack = parseCallStack(tracerResults)
-    // [OP-052], [OP-053]
-    const callInfoEntryPoint = callStack.find(call =>
-      call.to?.toLowerCase() === entryPointAddress?.toLowerCase() && call.from?.toLowerCase() !== entryPointAddress?.toLowerCase() &&
-      (call.method !== '0x' && call.method !== 'depositTo'))
-    // [OP-054]
-    requireCond(callInfoEntryPoint == null,
-      `illegal call into EntryPoint during validation ${callInfoEntryPoint?.method}`,
-      ValidationErrors.OpcodeValidation
-    )
+	// opcodes from [OP-011]
+	const bannedOpCodes = new Set([
+		"GASPRICE",
+		"GASLIMIT",
+		"DIFFICULTY",
+		"TIMESTAMP",
+		"BASEFEE",
+		"BLOCKHASH",
+		"NUMBER",
+		"ORIGIN",
+		"GAS",
+		"CREATE",
+		"COINBASE",
+		"SELFDESTRUCT",
+		"RANDOM",
+		"PREVRANDAO",
+		"INVALID",
+	]);
+	// opcodes allowed in staked entities [OP-080]
+	const opcodesOnlyInStakedEntities = new Set(["BALANCE", "SELFBALANCE"]);
+	// eslint-disable-next-line @typescript-eslint/no-base-to-string
+	if (Object.values(tracerResults.callsFromEntryPoint).length < 1) {
+		throw new Error("Unexpected traceCall result: no calls from entrypoint.");
+	}
+	if (tracerResults.calls != null) {
+		const callStack = parseCallStack(tracerResults);
+		// [OP-052], [OP-053]
+		const callInfoEntryPoint = callStack.find(
+			(call) =>
+				call.to?.toLowerCase() === entryPointAddress?.toLowerCase() &&
+				call.from?.toLowerCase() !== entryPointAddress?.toLowerCase() &&
+				call.method !== "0x" &&
+				call.method !== "depositTo"
+		);
+		// [OP-054]
+		requireCond(
+			callInfoEntryPoint == null,
+			`illegal call into EntryPoint during validation ${callInfoEntryPoint?.method}`,
+			ValidationErrors.OpcodeValidation
+		);
 
-    // [OP-061]
-    const illegalNonZeroValueCall = callStack.find(
-      call =>
-        call.to?.toLowerCase() !== entryPointAddress?.toLowerCase() &&
-        !BigNumber.from(call.value ?? 0).eq(0))
-    requireCond(
-      illegalNonZeroValueCall == null,
-      'May not may CALL with value',
-      ValidationErrors.OpcodeValidation)
-  }
+		// [OP-061]
+		const illegalNonZeroValueCall = callStack.find(
+			(call) => call.to?.toLowerCase() !== entryPointAddress?.toLowerCase() && !BigNumber.from(call.value ?? 0).eq(0)
+		);
+		requireCond(illegalNonZeroValueCall == null, "May not may CALL with value", ValidationErrors.OpcodeValidation);
+	}
 
-  const sender = userOp.sender.toLowerCase()
-  // stake info per "number" level (factory, sender, paymaster)
-  // we only use stake info if we notice a memory reference that require stake
-  const stakeInfoEntities = {
-    [sender]: validationResult.senderInfo
-  }
-  const factory = userOp.factory?.toLowerCase()
-  if (factory != null) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    stakeInfoEntities[factory] = validationResult.factoryInfo!
-  }
-  const paymaster = userOp.paymaster?.toLowerCase()
-  if (paymaster != null) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    stakeInfoEntities[paymaster] = validationResult.paymasterInfo!
-  }
+	const sender = userOp.sender.toLowerCase();
+	// stake info per "number" level (factory, sender, paymaster)
+	// we only use stake info if we notice a memory reference that require stake
+	const stakeInfoEntities = {
+		[sender]: validationResult.senderInfo,
+	};
+	const factory = userOp.factory?.toLowerCase();
+	if (factory != null) {
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		stakeInfoEntities[factory] = validationResult.factoryInfo!;
+	}
+	const paymaster = userOp.paymaster?.toLowerCase();
+	if (paymaster != null) {
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		stakeInfoEntities[paymaster] = validationResult.paymasterInfo!;
+	}
 
-  const entitySlots: { [addr: string]: Set<string> } = parseEntitySlots(stakeInfoEntities, tracerResults.keccak)
+	const entitySlots: { [addr: string]: Set<string> } = parseEntitySlots(stakeInfoEntities, tracerResults.keccak);
 
-  Object.entries(stakeInfoEntities).forEach(([entityAddress, entStakes]) => {
-    const entityTitle = getEntityTitle(userOp, entityAddress)
-    const currentNumLevel = tracerResults.callsFromEntryPoint.find(info => info.topLevelTargetAddress.toLowerCase() === entityAddress.toLowerCase())
-    if (currentNumLevel == null) {
-      if (entityAddress.toLowerCase() === userOp.sender.toLowerCase()) {
-        // should never happen... only factory, paymaster are optional.
-        throw new RpcError('missing trace into account validation', ValidationErrors.InvalidFields)
-      }
-      return
-    }
-    const opcodes = currentNumLevel.opcodes
-    const access = currentNumLevel.access
+	Object.entries(stakeInfoEntities).forEach(([entityAddress, entStakes]) => {
+		const entityTitle = getEntityTitle(userOp, entityAddress);
+		const currentNumLevel = tracerResults.callsFromEntryPoint.find(
+			(info) => info.topLevelTargetAddress.toLowerCase() === entityAddress.toLowerCase()
+		);
+		if (currentNumLevel == null) {
+			if (entityAddress.toLowerCase() === userOp.sender.toLowerCase()) {
+				// should never happen... only factory, paymaster are optional.
+				throw new RpcError("missing trace into account validation", ValidationErrors.InvalidFields);
+			}
+			return;
+		}
+		const opcodes = currentNumLevel.opcodes;
+		const access = currentNumLevel.access;
 
-    // [OP-020]
-    requireCond(!(currentNumLevel.oog ?? false),
-      `${entityTitle} internally reverts on oog`, ValidationErrors.OpcodeValidation)
+		// [OP-020]
+		requireCond(
+			!(currentNumLevel.oog ?? false),
+			`${entityTitle} internally reverts on oog`,
+			ValidationErrors.OpcodeValidation
+		);
 
-    // opcodes from [OP-011]
-    Object.keys(opcodes).forEach(opcode => {
-      requireCond(!bannedOpCodes.has(opcode), `${entityTitle} uses banned opcode: ${opcode}`, ValidationErrors.OpcodeValidation)
-      // [OP-080]
-      requireCond(!opcodesOnlyInStakedEntities.has(opcode) || isStaked(entStakes), `unstaked ${entityTitle} uses banned opcode: ${opcode}`, ValidationErrors.OpcodeValidation)
-    })
-    // [OP-031]
-    if (entityTitle === 'factory') {
-      requireCond((opcodes.CREATE2 ?? 0) <= 1, `${entityTitle} with too many CREATE2`, ValidationErrors.OpcodeValidation)
-    } else {
-      requireCond(opcodes.CREATE2 == null, `${entityTitle} uses banned opcode: CREATE2`, ValidationErrors.OpcodeValidation)
-    }
+		// opcodes from [OP-011]
+		Object.keys(opcodes).forEach((opcode) => {
+			requireCond(
+				!bannedOpCodes.has(opcode),
+				`${entityTitle} uses banned opcode: ${opcode}`,
+				ValidationErrors.OpcodeValidation
+			);
+			// [OP-080]
+			requireCond(
+				!opcodesOnlyInStakedEntities.has(opcode) || isStaked(entStakes),
+				`unstaked ${entityTitle} uses banned opcode: ${opcode}`,
+				ValidationErrors.OpcodeValidation
+			);
+		});
+		// [OP-031]
+		if (entityTitle === "factory") {
+			requireCond(
+				(opcodes.CREATE2 ?? 0) <= 1,
+				`${entityTitle} with too many CREATE2`,
+				ValidationErrors.OpcodeValidation
+			);
+		} else {
+			requireCond(
+				opcodes.CREATE2 == null,
+				`${entityTitle} uses banned opcode: CREATE2`,
+				ValidationErrors.OpcodeValidation
+			);
+		}
 
-    Object.entries(access).forEach(([addr, {
-      reads,
-      writes,
-      transientReads,
-      transientWrites
-    }]) => {
-      // testing read/write access on contract "addr"
-      if (addr.toLowerCase() === sender.toLowerCase()) {
-        // allowed to access sender's storage
-        // [STO-010]
-        return
-      }
+		Object.entries(access).forEach(([addr, { reads, writes, transientReads, transientWrites }]) => {
+			// testing read/write access on contract "addr"
+			if (addr.toLowerCase() === sender.toLowerCase()) {
+				// allowed to access sender's storage
+				// [STO-010]
+				return;
+			}
 
-      if (addr.toLowerCase() === entryPointAddress.toLowerCase()) {
-        // ignore storage access on entryPoint (balance/deposit of entities.
-        // we block them on method calls: only allowed to deposit, never to read
-        return
-      }
+			if (addr.toLowerCase() === entryPointAddress.toLowerCase()) {
+				// ignore storage access on entryPoint (balance/deposit of entities.
+				// we block them on method calls: only allowed to deposit, never to read
+				return;
+			}
 
-      // return true if the given slot is associated with the given address, given the known keccak operations:
-      // @param slot the SLOAD/SSTORE slot address we're testing
-      // @param addr - the address we try to check for association with
-      // @param reverseKeccak - a mapping we built for keccak values that contained the address
-      function associatedWith (slot: string, addr: string, entitySlots: { [addr: string]: Set<string> }): boolean {
-        const addrPadded = hexZeroPad(addr, 32).toLowerCase()
-        if (slot === addrPadded) {
-          return true
-        }
-        const k = entitySlots[addr]
-        if (k == null) {
-          return false
-        }
-        const slotN = BigNumber.from(slot)
-        // scan all slot entries to check of the given slot is within a structure, starting at that offset.
-        // assume a maximum size on a (static) structure size.
-        for (const k1 of k.keys()) {
-          const kn = BigNumber.from(k1)
-          if (slotN.gte(kn) && slotN.lt(kn.add(128))) {
-            return true
-          }
-        }
-        return false
-      }
+			// return true if the given slot is associated with the given address, given the known keccak operations:
+			// @param slot the SLOAD/SSTORE slot address we're testing
+			// @param addr - the address we try to check for association with
+			// @param reverseKeccak - a mapping we built for keccak values that contained the address
+			function associatedWith(slot: string, addr: string, entitySlots: { [addr: string]: Set<string> }): boolean {
+				const addrPadded = hexZeroPad(addr, 32).toLowerCase();
+				if (slot === addrPadded) {
+					return true;
+				}
+				const k = entitySlots[addr];
+				if (k == null) {
+					return false;
+				}
+				const slotN = BigNumber.from(slot);
+				// scan all slot entries to check of the given slot is within a structure, starting at that offset.
+				// assume a maximum size on a (static) structure size.
+				for (const k1 of k.keys()) {
+					const kn = BigNumber.from(k1);
+					if (slotN.gte(kn) && slotN.lt(kn.add(128))) {
+						return true;
+					}
+				}
+				return false;
+			}
 
-      debug('dump keccak calculations and reads', {
-        entityTitle,
-        entityAddress,
-        k: mapOf(tracerResults.keccak, k => keccak256(k)),
-        reads
-      })
+			debug("dump keccak calculations and reads", {
+				entityTitle,
+				entityAddress,
+				k: mapOf(tracerResults.keccak, (k) => keccak256(k)),
+				reads,
+			});
 
-      // [OP-070]: treat transient storage (TLOAD/TSTORE) just like storage.
-      // scan all slots. find a referenced slot
-      // at the end of the scan, we will check if the entity has stake, and report that slot if not.
-      let requireStakeSlot: string | undefined
-      [
-        ...Object.keys(writes),
-        ...Object.keys(reads),
-        ...Object.keys(transientWrites ?? {}),
-        ...Object.keys(transientReads ?? {})
-      ].forEach(slot => {
-        // slot associated with sender is allowed (e.g. token.balanceOf(sender)
-        // but during initial UserOp (where there is an initCode), it is allowed only for staked entity
-        if (associatedWith(slot, sender, entitySlots)) {
-          if (userOp.factory != null) {
-            // special case: account.validateUserOp is allowed to use assoc storage if factory is staked.
-            // [STO-022], [STO-021]
-            if (!(entityAddress.toLowerCase() === sender.toLowerCase() && isStaked(stakeInfoEntities[userOp.factory.toLowerCase()]))) {
-              requireStakeSlot = slot
-            }
-          }
-        } else if (associatedWith(slot, entityAddress, entitySlots)) {
-          // [STO-032]
-          // accessing a slot associated with entityAddr (e.g. token.balanceOf(paymaster)
-          requireStakeSlot = slot
-        } else if (addr.toLowerCase() === entityAddress.toLowerCase()) {
-          // [STO-031]
-          // accessing storage member of entity itself requires stake.
-          requireStakeSlot = slot
-        } else if (writes[slot] == null && transientWrites[slot] == null) {
-          // [STO-033]: staked entity have read-only access to any storage in non-entity contract.
-          requireStakeSlot = slot
-        } else {
-          // accessing arbitrary storage of another contract is not allowed
-          const isWrite = Object.keys(writes).includes(slot) || Object.keys(transientWrites ?? {}).includes(slot)
-          const isTransient = Object.keys(transientReads ?? {}).includes(slot) || Object.keys(transientWrites ?? {}).includes(slot)
-          const readWrite = isWrite ? 'write to' : 'read from'
-          const transientStr = isTransient ? 'transient ' : ''
-          requireCond(false,
-            `${entityTitle} has forbidden ${readWrite} ${transientStr}${nameAddr(addr, entityTitle)} slot ${slot}`,
-            ValidationErrors.OpcodeValidation, { [entityTitle]: entStakes?.addr })
-        }
-      })
+			// [OP-070]: treat transient storage (TLOAD/TSTORE) just like storage.
+			// scan all slots. find a referenced slot
+			// at the end of the scan, we will check if the entity has stake, and report that slot if not.
+			let requireStakeSlot: string | undefined;
+			[
+				...Object.keys(writes),
+				...Object.keys(reads),
+				...Object.keys(transientWrites ?? {}),
+				...Object.keys(transientReads ?? {}),
+			].forEach((slot) => {
+				// slot associated with sender is allowed (e.g. token.balanceOf(sender)
+				// but during initial UserOp (where there is an initCode), it is allowed only for staked entity
+				if (associatedWith(slot, sender, entitySlots)) {
+					if (userOp.factory != null) {
+						// special case: account.validateUserOp is allowed to use assoc storage if factory is staked.
+						// [STO-022], [STO-021]
+						console.log("[STO-022], [STO-021]");
+						if (
+							!(
+								entityAddress.toLowerCase() === sender.toLowerCase() &&
+								isStaked(stakeInfoEntities[userOp.factory.toLowerCase()])
+							)
+						) {
+							requireStakeSlot = slot;
+						}
+					}
+				} else if (associatedWith(slot, entityAddress, entitySlots)) {
+					// [STO-032]
+					// accessing a slot associated with entityAddr (e.g. token.balanceOf(paymaster)
+					console.log("[STO-032]");
+					requireStakeSlot = slot;
+				} else if (addr.toLowerCase() === entityAddress.toLowerCase()) {
+					// [STO-031]
+					// accessing storage member of entity itself requires stake.
+					console.log("[STO-031]");
+					requireStakeSlot = slot;
+				} else if (writes[slot] == null && transientWrites[slot] == null) {
+					// [STO-033]: staked entity have read-only access to any storage in non-entity contract.
+					console.log("[STO-033]");
+					requireStakeSlot = slot;
+				} else {
+					// accessing arbitrary storage of another contract is not allowed
+					const isWrite = Object.keys(writes).includes(slot) || Object.keys(transientWrites ?? {}).includes(slot);
+					const isTransient =
+						Object.keys(transientReads ?? {}).includes(slot) || Object.keys(transientWrites ?? {}).includes(slot);
+					const readWrite = isWrite ? "write to" : "read from";
+					const transientStr = isTransient ? "transient " : "";
+					requireCond(
+						false,
+						`${entityTitle} has forbidden ${readWrite} ${transientStr}${nameAddr(addr, entityTitle)} slot ${slot}`,
+						ValidationErrors.OpcodeValidation,
+						{ [entityTitle]: entStakes?.addr }
+					);
+				}
+			});
 
-      // if addr is current account/paymaster/factory, then return that title
-      // otherwise, return addr as-is
-      function nameAddr (addr: string, currentEntity: string): string {
-        const [title] = Object.entries(stakeInfoEntities).find(([title, info]) =>
-          info?.addr.toLowerCase() === addr.toLowerCase()) ?? []
+			// if addr is current account/paymaster/factory, then return that title
+			// otherwise, return addr as-is
+			function nameAddr(addr: string, currentEntity: string): string {
+				const [title] =
+					Object.entries(stakeInfoEntities).find(([title, info]) => info?.addr.toLowerCase() === addr.toLowerCase()) ??
+					[];
 
-        return title ?? addr
-      }
-      requireCondAndStake(requireStakeSlot != null, entStakes,
-        `unstaked ${entityTitle} accessed ${nameAddr(addr, entityTitle)} slot ${requireStakeSlot}`)
-    })
+				return title ?? addr;
+			}
+			requireCondAndStake(
+				requireStakeSlot != null,
+				entStakes,
+				`unstaked ${entityTitle} accessed ${nameAddr(addr, entityTitle)} slot ${requireStakeSlot}`
+			);
+		});
 
-    // check if the given entity is staked
-    function isStaked (entStake?: StakeInfo): boolean {
-      return entStake != null && BigNumber.from(0).lte(entStake.stake) && BigNumber.from(0).lte(entStake.unstakeDelaySec)
-    }
+		// check if the given entity is staked
+		function isStaked(entStake?: StakeInfo): boolean {
+			return (
+				entStake != null && BigNumber.from(0).lte(entStake.stake) && BigNumber.from(0).lte(entStake.unstakeDelaySec)
+			);
+		}
 
-    // helper method: if condition is true, then entity must be staked.
-    function requireCondAndStake (cond: boolean, entStake: StakeInfo | undefined, failureMessage: string): void {
-      if (!cond) {
-        return
-      }
-      if (entStake == null) {
-        throw new Error(`internal: ${entityTitle} not in userOp, but has storage accesses in ${JSON.stringify(access)}`)
-      }
-      requireCond(isStaked(entStake),
-        failureMessage, ValidationErrors.OpcodeValidation, { [entityTitle]: entStakes?.addr })
+		// helper method: if condition is true, then entity must be staked.
+		function requireCondAndStake(cond: boolean, entStake: StakeInfo | undefined, failureMessage: string): void {
+			if (!cond) {
+				return;
+			}
+			if (entStake == null) {
+				throw new Error(
+					`internal: ${entityTitle} not in userOp, but has storage accesses in ${JSON.stringify(access)}`
+				);
+			}
+			requireCond(isStaked(entStake), failureMessage, ValidationErrors.OpcodeValidation, {
+				[entityTitle]: entStakes?.addr,
+			});
 
-      // TODO: check real minimum stake values
-    }
+			// TODO: check real minimum stake values
+		}
 
-    // the only contract we allow to access before its deployment is the "sender" itself, which gets created.
-    let illegalZeroCodeAccess: any
-    for (const addr of Object.keys(currentNumLevel.contractSize)) {
-      // [OP-042]
-      if (addr !== sender && currentNumLevel.contractSize[addr].contractSize <= 2) {
-        illegalZeroCodeAccess = currentNumLevel.contractSize[addr]
-        illegalZeroCodeAccess.address = addr
-        break
-      }
-    }
-    // [OP-041]
-    requireCond(
-      illegalZeroCodeAccess == null,
-      `${entityTitle} accesses un-deployed contract address ${illegalZeroCodeAccess?.address as string} with opcode ${illegalZeroCodeAccess?.opcode as string}`, ValidationErrors.OpcodeValidation)
+		// the only contract we allow to access before its deployment is the "sender" itself, which gets created.
+		let illegalZeroCodeAccess: any;
+		for (const addr of Object.keys(currentNumLevel.contractSize)) {
+			// [OP-042]
+			if (addr !== sender && currentNumLevel.contractSize[addr].contractSize <= 2) {
+				illegalZeroCodeAccess = currentNumLevel.contractSize[addr];
+				illegalZeroCodeAccess.address = addr;
+				break;
+			}
+		}
+		// [OP-041]
+		requireCond(
+			illegalZeroCodeAccess == null,
+			`${entityTitle} accesses un-deployed contract address ${illegalZeroCodeAccess?.address as string} with opcode ${
+				illegalZeroCodeAccess?.opcode as string
+			}`,
+			ValidationErrors.OpcodeValidation
+		);
 
-    let illegalEntryPointCodeAccess
-    for (const addr of Object.keys(currentNumLevel.extCodeAccessInfo)) {
-      if (addr.toLowerCase() === entryPointAddress.toLowerCase()) {
-        illegalEntryPointCodeAccess = currentNumLevel.extCodeAccessInfo[addr]
-        break
-      }
-    }
-    requireCond(
-      illegalEntryPointCodeAccess == null,
-      `${entityTitle} accesses EntryPoint contract address ${entryPointAddress} with opcode ${illegalEntryPointCodeAccess}`, ValidationErrors.OpcodeValidation)
-  })
+		let illegalEntryPointCodeAccess;
+		for (const addr of Object.keys(currentNumLevel.extCodeAccessInfo)) {
+			if (addr.toLowerCase() === entryPointAddress.toLowerCase()) {
+				illegalEntryPointCodeAccess = currentNumLevel.extCodeAccessInfo[addr];
+				break;
+			}
+		}
+		requireCond(
+			illegalEntryPointCodeAccess == null,
+			`${entityTitle} accesses EntryPoint contract address ${entryPointAddress} with opcode ${illegalEntryPointCodeAccess}`,
+			ValidationErrors.OpcodeValidation
+		);
+	});
 
-  // return list of contract addresses by this UserOp. already known not to contain zero-sized addresses.
-  const addresses = tracerResults.callsFromEntryPoint.flatMap(level => Object.keys(level.contractSize))
-  const storageMap: StorageMap = {}
-  tracerResults.callsFromEntryPoint.forEach(level => {
-    Object.keys(level.access).forEach(addr => {
-      storageMap[addr] = storageMap[addr] ?? level.access[addr].reads
-    })
-  })
-  return [addresses, storageMap]
+	// return list of contract addresses by this UserOp. already known not to contain zero-sized addresses.
+	const addresses = tracerResults.callsFromEntryPoint.flatMap((level) => Object.keys(level.contractSize));
+	const storageMap: StorageMap = {};
+	tracerResults.callsFromEntryPoint.forEach((level) => {
+		Object.keys(level.access).forEach((addr) => {
+			storageMap[addr] = storageMap[addr] ?? level.access[addr].reads;
+		});
+	});
+	return [addresses, storageMap];
 }
