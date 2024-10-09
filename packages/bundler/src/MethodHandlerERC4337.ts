@@ -155,18 +155,18 @@ export class MethodHandlerERC4337 {
 		entryPointInput: string,
 		stateOverride?: StateOverride
 	): Promise<EstimateUserOpGasResult> {
+		const provider = this.provider;
+
 		const userOp: UserOperation = {
-			// default values for missing fields.
-			maxFeePerGas: 0,
-			maxPriorityFeePerGas: 0,
-			preVerificationGas: 0,
-			verificationGasLimit: 10e6,
 			...userOp1,
+			preVerificationGas: 300_000,
+			verificationGasLimit: 4e5,
 		} as any;
+
 		// todo: checks the existence of parameters, but since we hexlify the inputs, it fails to validate
 		await this._validateParameters(deepHexlify(userOp), entryPointInput);
 		// todo: validation manager duplicate?
-		const provider = this.provider;
+
 		const rpcParams = simulationRpcParams(
 			"simulateHandleOp",
 			this.entryPoint.address,
@@ -192,7 +192,7 @@ export class MethodHandlerERC4337 {
 			returnInfo.accountValidationData,
 			returnInfo.paymasterValidationData
 		);
-		const { preOpGas } = returnInfo;
+		const { preOpGas, paid } = returnInfo;
 
 		const network = await provider.getNetwork();
 
@@ -216,18 +216,31 @@ export class MethodHandlerERC4337 {
 		if (res.trace[0].error)
 			throw new RpcError(getSimulationErrorMessage(res.trace), ValidationErrors.UserOperationReverted);
 
-		// todo: use simulateHandleOp for this too...
-		const callGasLimit = await this.provider
-			.estimateGas(tx)
-			.then((b) => b.toNumber())
-			.catch((err) => {
-				console.log(err);
-				const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted " + JSON.stringify(err);
-				throw new RpcError(message, ValidationErrors.UserOperationReverted);
-			});
+		let callGasLimit;
 
-		const preVerificationGas = calcPreVerificationGas(userOp);
+		if (userOp.factory && userOp.factoryData) {
+			callGasLimit = paid.div(userOp.maxFeePerGas);
+		} else {
+			// todo: use simulateHandleOp for this too...
+			callGasLimit = await this.provider
+				.estimateGas(tx)
+				.then((b) => b.toNumber())
+				.catch((err) => {
+					console.log(err);
+					const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted " + JSON.stringify(err);
+					throw new RpcError(message, ValidationErrors.UserOperationReverted);
+				});
+		}
+
 		const verificationGasLimit = BigNumber.from(preOpGas).toNumber();
+
+		userOp.callGasLimit = callGasLimit;
+		userOp.verificationGasLimit = verificationGasLimit;
+
+		// console.log(callGasLimit);
+
+		const preVerificationGas = calcPreVerificationGas(deepHexlify(userOp));
+
 		return {
 			preVerificationGas,
 			verificationGasLimit,
