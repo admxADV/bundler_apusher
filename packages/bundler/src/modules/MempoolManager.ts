@@ -90,7 +90,6 @@ export class MempoolManager {
 			this.mempool[index] = entry;
 		} else {
 			debug("add userOp", userOp.sender, userOp.nonce);
-			console.log("add userOp");
 			this.checkReputation(senderInfo, paymasterInfo, factoryInfo, aggregatorInfo);
 			this.checkMultipleRolesViolation(userOp);
 			this.incrementEntryCount(userOp.sender);

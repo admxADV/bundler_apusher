@@ -223,7 +223,6 @@ export class ValidationManager implements IValidationManager {
 		};
 		let storageMap: StorageMap = {};
 		if (!this.unsafe) {
-			console.log("VALIDATION");
 			let tracerResult: BundlerTracerResult;
 			[res, tracerResult] = await this._geth_traceCall_SimulateValidation(userOp, extraOptions).catch((e) => {
 				throw e;
@@ -243,8 +242,6 @@ export class ValidationManager implements IValidationManager {
 			res = await this._callSimulateValidation(userOp);
 		}
 
-		console.log(res.returnInfo);
-
 		requireCond(
 			!res.returnInfo.sigFailed,
 			"Invalid UserOp signature or paymaster signature",
@@ -252,8 +249,7 @@ export class ValidationManager implements IValidationManager {
 		);
 
 		const now = Math.floor(Date.now() / 1000);
-
-		console.log(now);
+		
 		requireCond(
 			res.returnInfo.validAfter <= now,
 			`time-range in the future time ${res.returnInfo.validAfter}, now=${now}`,
