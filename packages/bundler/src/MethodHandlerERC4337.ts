@@ -8,6 +8,7 @@ import {
 	decodeSimulateHandleOpResult,
 	deepHexlify,
 	erc4337RuntimeVersion,
+	getUserOpHash,
 	IEntryPoint,
 	mergeValidationDataValues,
 	PackedUserOperation,
@@ -22,6 +23,7 @@ import {
 	UserOperationEventEvent,
 	ValidationErrors,
 } from "@account-abstraction/utils";
+import { IAccountExecute__factory } from "@account-abstraction/utils/dist/src/types";
 import { IValidationManager, ValidateUserOpResult } from "@account-abstraction/validation-manager";
 import { EventFragment } from "@ethersproject/abi";
 import { BundlerConfig } from "./BundlerConfig";
@@ -171,12 +173,23 @@ export class MethodHandlerERC4337 {
 		);
 		const { preOpGas } = returnInfo;
 
+		const network = await provider.getNetwork();
+
+		let data = userOp.callData;
+
+		if (data.toString().substring(0, 10) === "0x8dd7712f") {
+			data = IAccountExecute__factory.createInterface().encodeFunctionData("executeUserOp", [
+				packUserOp(userOp),
+				getUserOpHash(userOp, this.entryPoint.address, network.chainId),
+			]);
+		}
+
 		// todo: use simulateHandleOp for this too...
 		const callGasLimit = await this.provider
 			.estimateGas({
 				from: this.entryPoint.address,
 				to: userOp.sender,
-				data: userOp.callData,
+				data,
 			})
 			.then((b) => b.toNumber())
 			.catch((err) => {
