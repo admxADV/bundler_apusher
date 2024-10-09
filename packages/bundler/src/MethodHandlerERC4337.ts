@@ -60,6 +60,27 @@ export interface EstimateUserOpGasResult {
 	callGasLimit: BigNumberish;
 }
 
+type TraceItem = {
+	action: { from: string; to: string; input: string; callType: string };
+	error: string;
+	result: { gasUsed: string; output: string };
+	subtraces: number;
+	traceAddress: any[];
+	type: string;
+};
+
+function getSimulationErrorMessage(trace: TraceItem[]): string {
+	// Найти последний объект с полем error
+	const lastErrorItem = [...trace].reverse().find((item) => item.action.callType === "call" && item.error);
+
+	// Если такой объект существует, вывести необходимые поля
+	if (lastErrorItem) {
+		return `${lastErrorItem.action.callType} ${lastErrorItem.action.input} from ${lastErrorItem.action.from} to ${lastErrorItem.action.to} reverted with ${lastErrorItem.result.output}`;
+	} else {
+		return "Unexpected simulation error";
+	}
+}
+
 export class MethodHandlerERC4337 {
 	constructor(
 		readonly execManager: ExecutionManager,
@@ -184,13 +205,20 @@ export class MethodHandlerERC4337 {
 			]);
 		}
 
+		const tx = {
+			from: this.entryPoint.address,
+			to: userOp.sender,
+			data,
+		};
+
+		const res = await this.provider.send("trace_call", [tx, ["trace"], "latest"]);
+
+		if (res.trace[0].error)
+			throw new RpcError(getSimulationErrorMessage(res.trace), ValidationErrors.UserOperationReverted);
+
 		// todo: use simulateHandleOp for this too...
 		const callGasLimit = await this.provider
-			.estimateGas({
-				from: this.entryPoint.address,
-				to: userOp.sender,
-				data,
-			})
+			.estimateGas(tx)
 			.then((b) => b.toNumber())
 			.catch((err) => {
 				console.log(err);
