@@ -260,7 +260,6 @@ export class BundlerServer {
 				result = await this.debugHandler.getStakeStatus(params[0], params[1]);
 				break;
 			default:
-				console.log("DEAULT");
 				throw new RpcError(`Method ${method} is not supported`, -32601);
 		}
 		return result;
