@@ -1,13 +1,13 @@
-import { ReputationManager } from "./ReputationManager";
-import Debug from "debug";
-import { MempoolManager } from "./MempoolManager";
-import { TypedEvent } from "../types/common";
 import {
 	AccountDeployedEvent,
 	IEntryPoint,
 	SignatureAggregatorChangedEvent,
 	UserOperationEventEvent,
 } from "@account-abstraction/utils";
+import Debug from "debug";
+import { TypedEvent } from "../types/common";
+import { MempoolManager } from "./MempoolManager";
+import { ReputationManager } from "./ReputationManager";
 
 const debug = Debug("aa.events");
 
@@ -37,8 +37,9 @@ export class EventsManager {
 	 * process all new events since last run
 	 */
 	async handlePastEvents(): Promise<void> {
-		if (this.lastBlock === undefined) {
-			this.lastBlock = Math.max(1, (await this.entryPoint.provider.getBlockNumber()) - 1000);
+		const block = await this.entryPoint.provider.getBlockNumber();
+		if (this.lastBlock === undefined || block - this.lastBlock >= 1000) {
+			this.lastBlock = Math.max(1, block - 1000);
 		}
 		const events = await this.entryPoint.queryFilter({ address: this.entryPoint.address }, this.lastBlock);
 		for (const ev of events) {
