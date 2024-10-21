@@ -8,7 +8,6 @@ import {
 	decodeSimulateHandleOpResult,
 	deepHexlify,
 	erc4337RuntimeVersion,
-	getUserOpHash,
 	IEntryPoint,
 	mergeValidationDataValues,
 	PackedUserOperation,
@@ -23,7 +22,6 @@ import {
 	UserOperationEventEvent,
 	ValidationErrors,
 } from "@account-abstraction/utils";
-import { IAccountExecute__factory } from "@account-abstraction/utils/dist/src/types";
 import { IValidationManager, ValidateUserOpResult } from "@account-abstraction/validation-manager";
 import { EventFragment } from "@ethersproject/abi";
 import { BundlerConfig } from "./BundlerConfig";
@@ -58,27 +56,85 @@ export interface EstimateUserOpGasResult {
 	 * estimated cost of calling the account with the given callData
 	 */
 	callGasLimit: BigNumberish;
+	maxFeePerGas: BigNumberish;
+	maxPriorityFeePerGas: BigNumberish;
+	paymasterPostOpGasLimit: BigNumberish;
+	paymasterVerificationGasLimit: BigNumberish;
 }
 
 type TraceItem = {
-	action: { from: string; to: string; input: string; callType: string };
-	error: string;
-	result: { gasUsed: string; output: string };
-	subtraces: number;
-	traceAddress: any[];
+	from: string;
+	gas: string;
+	gasUsed: string;
+	to: string;
+	input: string;
+	output: string;
+	calls: TraceItem[];
+	value: string;
+	error?: string;
 	type: string;
 };
 
-function getSimulationErrorMessage(trace: TraceItem[]): string {
-	// Найти последний объект с полем error
-	const lastErrorItem = [...trace].reverse().find((item) => item.action.callType === "call" && item.error);
+// type TraceItem = {
+// 	action: { from: string; to: string; input: string; callType: string };
+// 	error?: string;
+// 	result: { gasUsed: string; output: string };
+// 	subtraces: number;
+// 	traceAddress: any[];
+// 	type: string;
+// 	children?: TraceItem[];
+// };
 
+const EXECUTE_USEROP_SELECTOR = "0x8dd7712f";
+const VALIDATE_PAYMASTER_SELECTOR = "0x52b7512c";
+const POSTOP_SELECTOR = "0x7c627b21";
+const VERIFICATION_SELECTOR = "0x19822f7c";
+
+function getSimulationErrorMessage(traceItem: TraceItem | null): string {
 	// Если такой объект существует, вывести необходимые поля
-	if (lastErrorItem) {
-		return `${lastErrorItem.action.callType} ${lastErrorItem.action.input} from ${lastErrorItem.action.from} to ${lastErrorItem.action.to} reverted with ${lastErrorItem.result.output}`;
+	if (traceItem) {
+		return `${traceItem.type} ${traceItem.input} from ${traceItem.from} to ${traceItem.to} reverted with "${traceItem.error}:" ${traceItem.output}`;
 	} else {
 		return "Unexpected simulation error";
 	}
+}
+
+function findRevertedCall(node: TraceItem): TraceItem | null {
+	// Если это лист (нет детей) и есть ошибка "Reverted", возвращаем этот элемент
+	if ((!node.calls || node.calls.length === 0) && node.error && node.type !== "STATICCALL") {
+		return node;
+	}
+
+	// Если у узла есть дочерние элементы, проверяем их
+	if (node.calls) {
+		for (const call of node.calls) {
+			const result = findRevertedCall(call);
+			if (result) {
+				return result;
+			}
+		}
+	}
+
+	// Если ни один дочерний элемент не подошел, возвращаем null
+	return null;
+}
+
+function getCallFromTrace(trace: TraceItem, from: string, to: string, selector: string): TraceItem | null {
+	if (trace.from === from && trace.to === to && trace.input.substring(0, 10) === selector) {
+		return trace;
+	}
+
+	// Если у узла есть дочерние элементы, проверяем их
+	if (trace.calls) {
+		for (const call of trace.calls) {
+			const result = getCallFromTrace(call, from, to, selector);
+			if (result) {
+				return result;
+			}
+		}
+	}
+
+	return null;
 }
 
 export class MethodHandlerERC4337 {
@@ -158,9 +214,11 @@ export class MethodHandlerERC4337 {
 		const provider = this.provider;
 
 		const userOp: UserOperation = {
+			maxFeePerGas: 0,
+			maxPriorityFeePerGas: 0,
+			preVerificationGas: 0,
+			verificationGasLimit: 10e6,
 			...userOp1,
-			preVerificationGas: 300_000,
-			verificationGasLimit: 4e5,
 		} as any;
 
 		// todo: checks the existence of parameters, but since we hexlify the inputs, it fails to validate
@@ -173,71 +231,80 @@ export class MethodHandlerERC4337 {
 			userOp,
 			[AddressZero, "0x"],
 			stateOverride
-			// {
-			// allow estimation when account's balance is zero.
-			// todo: need a way to flag this, and not enable always.
-			// [userOp.sender]: {
-			//   balance: hexStripZeros(parseEther('1').toHexString())
-			// }
-			// }
 		);
 
-		const ret = await provider.send("eth_call", rpcParams).catch((e: any) => {
+		const trace = await provider.send("debug_traceCall", rpcParams).catch((e: any) => {
 			throw new RpcError(decodeRevertReason(e) as string, ValidationErrors.SimulateValidation);
 		});
 
-		const returnInfo = decodeSimulateHandleOpResult(ret);
+		const errorTraceItem = findRevertedCall(trace);
+
+		if (errorTraceItem)
+			throw new RpcError(
+				getSimulationErrorMessage(errorTraceItem),
+				ValidationErrors.UserOperationReverted,
+				errorTraceItem
+			);
+
+		const returnInfo = decodeSimulateHandleOpResult(trace.output);
 
 		const { validAfter, validUntil } = mergeValidationDataValues(
 			returnInfo.accountValidationData,
 			returnInfo.paymasterValidationData
 		);
-		const { preOpGas, paid } = returnInfo;
+		const { preOpGas } = returnInfo;
 
-		const network = await provider.getNetwork();
+		const executeCall = getCallFromTrace(
+			trace,
+			this.entryPoint.address.toLowerCase(),
+			userOp.sender.toLowerCase(),
+			EXECUTE_USEROP_SELECTOR
+		);
 
-		let data = userOp.callData;
+		const validatePaymasterCall = getCallFromTrace(
+			trace,
+			this.entryPoint.address.toLowerCase(),
+			userOp.paymaster!.toLowerCase(),
+			VALIDATE_PAYMASTER_SELECTOR
+		);
+		const postOpCall = getCallFromTrace(
+			trace,
+			this.entryPoint.address.toLowerCase(),
+			userOp.paymaster!.toLowerCase(),
+			POSTOP_SELECTOR
+		);
+		const verificationCall = getCallFromTrace(
+			trace,
+			this.entryPoint.address.toLowerCase(),
+			userOp.sender.toLowerCase(),
+			VERIFICATION_SELECTOR
+		);
 
-		if (data.toString().substring(0, 10) === "0x8dd7712f") {
-			data = IAccountExecute__factory.createInterface().encodeFunctionData("executeUserOp", [
-				packUserOp(userOp),
-				getUserOpHash(userOp, this.entryPoint.address, network.chainId),
-			]);
-		}
+		//todo: handle when calls are null
 
-		const tx = {
-			from: this.entryPoint.address,
-			to: userOp.sender,
-			data,
-		};
+		const callGasLimit = BigInt(executeCall?.gasUsed!) + BigInt(5000);
+		const actualPaymasterVerificationGasLimit = BigInt(validatePaymasterCall?.gasUsed!); // constant for _validatePaymasterPrepayment execution
+		const paymasterPostOpGasLimit = BigInt(postOpCall?.gasUsed!);
+		const actualAccountVerificationGasLimit = BigInt(verificationCall?.gasUsed!);
 
-		const res = await this.provider.send("trace_call", [tx, ["trace"], "latest"]);
+		const epValidationGas =
+			preOpGas.toBigInt() - actualAccountVerificationGasLimit - actualPaymasterVerificationGasLimit;
 
-		if (res.trace[0].error)
-			throw new RpcError(getSimulationErrorMessage(res.trace), ValidationErrors.UserOperationReverted);
+		const [accountValidationGasOverhead, paymasterValidationGasOverhead] = [
+			(epValidationGas * BigInt(57)) / BigInt(100),
+			(epValidationGas * BigInt(43)) / BigInt(100),
+		];
 
-		let callGasLimit;
+		const verificationGasLimit = actualAccountVerificationGasLimit + accountValidationGasOverhead + BigInt(3000);
+		const paymasterVerificationGasLimit =
+			actualPaymasterVerificationGasLimit + paymasterValidationGasOverhead + BigInt(3000);
 
-		if (userOp.factory && userOp.factoryData) {
-			callGasLimit = paid.div(userOp.maxFeePerGas);
-		} else {
-			// todo: use simulateHandleOp for this too...
-			callGasLimit = await this.provider
-				.estimateGas(tx)
-				.then((b) => b.toNumber())
-				.catch((err) => {
-					console.log(err);
-					const message = err.message.match(/reason="(.*?)"/)?.at(1) ?? "execution reverted " + JSON.stringify(err);
-					throw new RpcError(message, ValidationErrors.UserOperationReverted);
-				});
-		}
+		const feeData = await provider.getFeeData();
 
-		const verificationGasLimit = BigNumber.from(preOpGas).toNumber();
+		const maxFeePerGas = feeData.gasPrice! ?? feeData.maxFeePerGas;
+		const maxPriorityFeePerGas = feeData.gasPrice! ?? feeData.maxPriorityFeePerGas;
 
-		userOp.callGasLimit = callGasLimit;
-		userOp.verificationGasLimit = verificationGasLimit;
-
-		// console.log(callGasLimit);
+		userOp.preVerificationGas = 50_000;
 
 		const preVerificationGas = calcPreVerificationGas(deepHexlify(userOp));
 
@@ -247,6 +314,10 @@ export class MethodHandlerERC4337 {
 			validAfter,
 			validUntil,
 			callGasLimit,
+			maxFeePerGas,
+			maxPriorityFeePerGas,
+			paymasterPostOpGasLimit,
+			paymasterVerificationGasLimit,
 		};
 	}
 
