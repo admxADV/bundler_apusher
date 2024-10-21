@@ -1,8 +1,8 @@
-import { packUserOp } from "./ERC4337Utils";
 import EntryPointSimulationsJson from "@account-abstraction/contracts/artifacts/EntryPointSimulations.json";
+import { packUserOp } from "./ERC4337Utils";
 
-import { EntryPointSimulations__factory, IEntryPointSimulations } from "./types";
 import { UserOperation } from "./interfaces/UserOperation";
+import { EntryPointSimulations__factory, IEntryPointSimulations } from "./types";
 
 export const entryPointSimulationsInterface = EntryPointSimulations__factory.createInterface();
 
@@ -48,10 +48,7 @@ export function simulationRpcParams(
 	return [
 		tx,
 		"latest",
-		{
-			...extraOptions,
-			...stateOverride,
-		},
+		{ tracer: "callTracer", enableReturnData: true, stateOverrides: { ...extraOptions, ...stateOverride } },
 	];
 }
 

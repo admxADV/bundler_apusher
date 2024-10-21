@@ -95,10 +95,17 @@ export class BundleManager {
 	): Promise<SendBundleReturn | undefined> {
 		try {
 			const feeData = await this.provider.getFeeData();
+			console.log({ feeData });
 			// TODO: estimate is not enough. should trace with validation rules, to prevent on-chain revert.
-			const tx = await this.entryPoint.populateTransaction.handleOps(userOps.map(packUserOp), beneficiary);
+			const tx = await this.entryPoint.populateTransaction.handleOps(userOps.map(packUserOp), beneficiary, {
+				type: 2,
+				nonce: await this.signer.getTransactionCount(),
+				maxPriorityFeePerGas: feeData.gasPrice ?? 0,
+				maxFeePerGas: feeData.gasPrice ?? 0,
+			});
 			tx.chainId = this.provider._network.chainId;
-			tx.gasPrice = feeData.gasPrice ? feeData.gasPrice : undefined;
+			// tx.maxFeePerGas = feeData.maxFeePerGas ?? undefined;
+			// tx.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? undefined;
 
 			let ret: string;
 			if (this.conditionalRpc) {

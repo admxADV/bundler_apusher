@@ -8,30 +8,30 @@ import { calcPreVerificationGas } from "@account-abstraction/sdk";
 import {
 	AddressZero,
 	CodeHashGetter__factory,
+	IEntryPoint,
+	IEntryPointSimulations__factory,
+	OperationBase,
 	ReferencedCodeHashes,
 	RpcError,
 	StakeInfo,
+	StakeInfoStructOutput,
 	StorageMap,
 	UserOperation,
 	ValidationErrors,
+	ValidationResultStructOutput,
 	decodeErrorReason,
+	decodeRevertReason,
 	getAddr,
-	requireCond,
-	runContractScript,
+	mergeValidationDataValues,
 	packUserOp,
 	requireAddressAndFields,
-	decodeRevertReason,
-	mergeValidationDataValues,
-	IEntryPointSimulations__factory,
-	IEntryPoint,
-	ValidationResultStructOutput,
-	StakeInfoStructOutput,
-	OperationBase,
+	requireCond,
+	runContractScript,
 } from "@account-abstraction/utils";
 
-import { tracerResultParser } from "./TracerResultParser";
-import { BundlerTracerResult, bundlerCollectorTracer, ExitInfo } from "./BundlerCollectorTracer";
+import { BundlerTracerResult, ExitInfo, bundlerCollectorTracer } from "./BundlerCollectorTracer";
 import { debug_traceCall } from "./GethTracer";
+import { tracerResultParser } from "./TracerResultParser";
 
 import EntryPointSimulationsJson from "@account-abstraction/contracts/artifacts/EntryPointSimulations.json";
 import { IValidationManager, ValidateUserOpResult, ValidationResult } from "./IValidationManager";
@@ -274,8 +274,11 @@ export class ValidationManager implements IValidationManager {
 			ValidationErrors.UnsupportedSignatureAggregator
 		);
 
-		const verificationCost = BigNumber.from(res.returnInfo.preOpGas).sub(userOp.preVerificationGas);
-		const extraGas = BigNumber.from(userOp.verificationGasLimit).sub(verificationCost).toNumber();
+		const verificationCost = BigNumber.from(res.returnInfo.preOpGas).sub(userOp.preVerificationGas); // account + paymaster verify
+		const extraGas = BigNumber.from(userOp.verificationGasLimit)
+			.add(BigNumber.from(userOp.paymasterVerificationGasLimit))
+			.sub(verificationCost)
+			.toNumber(); //
 		requireCond(
 			extraGas >= 2000,
 			`verificationGas should have extra 2000 gas. has only ${extraGas}`,
