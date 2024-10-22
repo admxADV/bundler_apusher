@@ -382,7 +382,7 @@ export class MethodHandlerERC4337 {
 	}
 
 	async _getUserOperationEvent(userOpHash: string): Promise<UserOperationEventEvent> {
-		const blockSpan = 1000;
+		const blockSpan = 9999;
 		const currentBlockNumber = await this.provider.getBlockNumber();
 		// TODO: eth_getLogs is throttled. must be acceptable for finding a UserOperation by hash
 		const event = await this.entryPoint.queryFilter(
