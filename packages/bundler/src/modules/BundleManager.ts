@@ -95,7 +95,6 @@ export class BundleManager {
 	): Promise<SendBundleReturn | undefined> {
 		try {
 			const feeData = await this.provider.getFeeData();
-			console.log({ feeData });
 			// TODO: estimate is not enough. should trace with validation rules, to prevent on-chain revert.
 			const tx = await this.entryPoint.populateTransaction.handleOps(userOps.map(packUserOp), beneficiary, {
 				type: 2,

@@ -137,6 +137,33 @@ function getCallFromTrace(trace: TraceItem, from: string, to: string, selector: 
 	return null;
 }
 
+function getDepth(traceItem: TraceItem): number {
+	// Base case: if there are no calls, the depth is 1
+	if (!traceItem.calls || traceItem.calls.length === 0) {
+		return 1;
+	}
+
+	// Recursive case: find the depth of each call and add 1 for the current level
+	let maxDepth = 0;
+	for (const call of traceItem.calls) {
+		const callDepth = getDepth(call);
+		if (callDepth > maxDepth) {
+			maxDepth = callDepth;
+		}
+	}
+
+	return maxDepth + 1;
+}
+
+function getCallGasLimit(call: TraceItem | null) {
+	if (!call) throw new RpcError("No call was made. Was that intentional?", ValidationErrors.UserOperationReverted);
+	if (call?.error) throw new RpcError(getSimulationErrorMessage(call), ValidationErrors.UserOperationReverted, call);
+
+	const depth = BigInt(getDepth(call));
+
+	return (BigInt(call.gasUsed) * BigInt(64) ** depth) / BigInt(63) ** depth + BigInt(2000);
+}
+
 export class MethodHandlerERC4337 {
 	constructor(
 		readonly execManager: ExecutionManager,
@@ -213,12 +240,17 @@ export class MethodHandlerERC4337 {
 	): Promise<EstimateUserOpGasResult> {
 		const provider = this.provider;
 
+		const feeData = await provider.getFeeData();
+
+		const maxFeePerGas = feeData.gasPrice! ?? feeData.maxFeePerGas;
+		const maxPriorityFeePerGas = feeData.gasPrice! ?? feeData.maxPriorityFeePerGas;
+
 		const userOp: UserOperation = {
-			maxFeePerGas: 0,
-			maxPriorityFeePerGas: 0,
 			preVerificationGas: 0,
 			verificationGasLimit: 10e6,
 			...userOp1,
+			maxFeePerGas,
+			maxPriorityFeePerGas,
 		} as any;
 
 		// todo: checks the existence of parameters, but since we hexlify the inputs, it fails to validate
@@ -237,14 +269,22 @@ export class MethodHandlerERC4337 {
 			throw new RpcError(decodeRevertReason(e) as string, ValidationErrors.SimulateValidation);
 		});
 
-		const errorTraceItem = findRevertedCall(trace);
+		console.dir(trace, { depth: null });
 
-		if (errorTraceItem)
+		if (trace.error) {
+			let message;
+
+			const errorTraceItem = findRevertedCall(trace);
+
+			if (errorTraceItem) message = getSimulationErrorMessage(errorTraceItem);
+			else message = decodeRevertReason(trace.output);
+
 			throw new RpcError(
-				getSimulationErrorMessage(errorTraceItem),
+				message ?? "Unexpected error during gas estimation",
 				ValidationErrors.UserOperationReverted,
 				errorTraceItem
 			);
+		}
 
 		const returnInfo = decodeSimulateHandleOpResult(trace.output);
 
@@ -260,7 +300,6 @@ export class MethodHandlerERC4337 {
 			userOp.sender.toLowerCase(),
 			EXECUTE_USEROP_SELECTOR
 		);
-
 		const validatePaymasterCall = getCallFromTrace(
 			trace,
 			this.entryPoint.address.toLowerCase(),
@@ -280,12 +319,10 @@ export class MethodHandlerERC4337 {
 			VERIFICATION_SELECTOR
 		);
 
-		//todo: handle when calls are null
-
-		const callGasLimit = BigInt(executeCall?.gasUsed!) + BigInt(5000);
-		const actualPaymasterVerificationGasLimit = BigInt(validatePaymasterCall?.gasUsed!); // constant for _validatePaymasterPrepayment execution
-		const paymasterPostOpGasLimit = BigInt(postOpCall?.gasUsed!);
-		const actualAccountVerificationGasLimit = BigInt(verificationCall?.gasUsed!);
+		const callGasLimit = getCallGasLimit(executeCall);
+		const actualPaymasterVerificationGasLimit = getCallGasLimit(validatePaymasterCall); // constant for _validatePaymasterPrepayment execution
+		const paymasterPostOpGasLimit = getCallGasLimit(postOpCall);
+		const actualAccountVerificationGasLimit = getCallGasLimit(verificationCall);
 
 		const epValidationGas =
 			preOpGas.toBigInt() - actualAccountVerificationGasLimit - actualPaymasterVerificationGasLimit;
@@ -298,11 +335,6 @@ export class MethodHandlerERC4337 {
 		const verificationGasLimit = actualAccountVerificationGasLimit + accountValidationGasOverhead + BigInt(3000);
 		const paymasterVerificationGasLimit =
 			actualPaymasterVerificationGasLimit + paymasterValidationGasOverhead + BigInt(3000);
-
-		const feeData = await provider.getFeeData();
-
-		const maxFeePerGas = feeData.gasPrice! ?? feeData.maxFeePerGas;
-		const maxPriorityFeePerGas = feeData.gasPrice! ?? feeData.maxPriorityFeePerGas;
 
 		userOp.preVerificationGas = 50_000;
 
