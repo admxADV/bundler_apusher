@@ -56,8 +56,6 @@ export interface EstimateUserOpGasResult {
 	 * estimated cost of calling the account with the given callData
 	 */
 	callGasLimit: BigNumberish;
-	maxFeePerGas: BigNumberish;
-	maxPriorityFeePerGas: BigNumberish;
 	paymasterPostOpGasLimit: BigNumberish;
 	paymasterVerificationGasLimit: BigNumberish;
 }
@@ -234,24 +232,11 @@ export class MethodHandlerERC4337 {
 	 * @param stateOverride
 	 */
 	async estimateUserOperationGas(
-		userOp1: Partial<UserOperation>,
+		userOp: UserOperation,
 		entryPointInput: string,
 		stateOverride?: StateOverride
 	): Promise<EstimateUserOpGasResult> {
 		const provider = this.provider;
-
-		const feeData = await provider.getFeeData();
-
-		const maxFeePerGas = feeData.gasPrice! ?? feeData.maxFeePerGas;
-		const maxPriorityFeePerGas = feeData.gasPrice! ?? feeData.maxPriorityFeePerGas;
-
-		const userOp: UserOperation = {
-			preVerificationGas: 0,
-			verificationGasLimit: 10e6,
-			...userOp1,
-			maxFeePerGas,
-			maxPriorityFeePerGas,
-		} as any;
 
 		// todo: checks the existence of parameters, but since we hexlify the inputs, it fails to validate
 		await this._validateParameters(deepHexlify(userOp), entryPointInput);
@@ -268,8 +253,6 @@ export class MethodHandlerERC4337 {
 		const trace = await provider.send("debug_traceCall", rpcParams).catch((e: any) => {
 			throw new RpcError(decodeRevertReason(e) as string, ValidationErrors.SimulateValidation);
 		});
-
-		console.dir(trace, { depth: null });
 
 		if (trace.error) {
 			let message;
@@ -346,8 +329,6 @@ export class MethodHandlerERC4337 {
 			validAfter,
 			validUntil,
 			callGasLimit,
-			maxFeePerGas,
-			maxPriorityFeePerGas,
 			paymasterPostOpGasLimit,
 			paymasterVerificationGasLimit,
 		};
