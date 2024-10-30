@@ -87,6 +87,7 @@ const EXECUTE_USEROP_SELECTOR = "0x8dd7712f";
 const VALIDATE_PAYMASTER_SELECTOR = "0x52b7512c";
 const POSTOP_SELECTOR = "0x7c627b21";
 const VERIFICATION_SELECTOR = "0x19822f7c";
+const CREATE_SENDER_SELECTOR = "0x570e1a36";
 
 function getSimulationErrorMessage(traceItem: TraceItem | null): string {
 	// Если такой объект существует, вывести необходимые поля
@@ -117,15 +118,26 @@ function findRevertedCall(node: TraceItem): TraceItem | null {
 	return null;
 }
 
-function getCallFromTrace(trace: TraceItem, from: string, to: string, selector: string): TraceItem | null {
-	if (trace.from === from && trace.to === to && trace.input.substring(0, 10) === selector) {
-		return trace;
+interface GetCallFromTraceParams {
+	from?: string;
+	to?: string;
+}
+
+function getCallFromTrace(trace: TraceItem, selector: string, params?: GetCallFromTraceParams): TraceItem | null {
+	if (trace.input.substring(0, 10) === selector) {
+		if (!params?.from && !params?.to) return trace;
+		if (params.from && params.to) {
+			if (params.from === trace.from && params.to === trace.to) return trace;
+		} else {
+			if (params.from && params.from === trace.from) return trace;
+			if (params.to && params.to === trace.to) return trace;
+		}
 	}
 
 	// Если у узла есть дочерние элементы, проверяем их
 	if (trace.calls) {
 		for (const call of trace.calls) {
-			const result = getCallFromTrace(call, from, to, selector);
+			const result = getCallFromTrace(call, selector, params);
 			if (result) {
 				return result;
 			}
@@ -154,12 +166,12 @@ function getDepth(traceItem: TraceItem): number {
 }
 
 function getCallGasLimit(call: TraceItem | null) {
-	if (!call) throw new RpcError("No call was made. Was that intentional?", ValidationErrors.UserOperationReverted);
+	if (!call) return BigInt(0);
 	if (call?.error) throw new RpcError(getSimulationErrorMessage(call), ValidationErrors.UserOperationReverted, call);
 
 	const depth = BigInt(getDepth(call));
 
-	return (BigInt(call.gasUsed) * BigInt(64) ** depth) / BigInt(63) ** depth + BigInt(2000);
+	return (BigInt(call.gasUsed) * BigInt(64) ** depth) / BigInt(63) ** depth;
 }
 
 export class MethodHandlerERC4337 {
@@ -275,49 +287,33 @@ export class MethodHandlerERC4337 {
 			returnInfo.accountValidationData,
 			returnInfo.paymasterValidationData
 		);
-		const { preOpGas } = returnInfo;
 
-		const executeCall = getCallFromTrace(
-			trace,
-			this.entryPoint.address.toLowerCase(),
-			userOp.sender.toLowerCase(),
-			EXECUTE_USEROP_SELECTOR
-		);
-		const validatePaymasterCall = getCallFromTrace(
-			trace,
-			this.entryPoint.address.toLowerCase(),
-			userOp.paymaster!.toLowerCase(),
-			VALIDATE_PAYMASTER_SELECTOR
-		);
-		const postOpCall = getCallFromTrace(
-			trace,
-			this.entryPoint.address.toLowerCase(),
-			userOp.paymaster!.toLowerCase(),
-			POSTOP_SELECTOR
-		);
-		const verificationCall = getCallFromTrace(
-			trace,
-			this.entryPoint.address.toLowerCase(),
-			userOp.sender.toLowerCase(),
-			VERIFICATION_SELECTOR
-		);
+		const executeCall = getCallFromTrace(trace, EXECUTE_USEROP_SELECTOR, {
+			from: this.entryPoint.address.toLowerCase(),
+			to: userOp.sender.toLowerCase(),
+		});
+		const validatePaymasterCall = getCallFromTrace(trace, VALIDATE_PAYMASTER_SELECTOR, {
+			from: this.entryPoint.address.toLowerCase(),
+			to: userOp.paymaster!.toLowerCase(),
+		});
+		const postOpCall = getCallFromTrace(trace, POSTOP_SELECTOR, {
+			from: this.entryPoint.address.toLowerCase(),
+			to: userOp.paymaster!.toLowerCase(),
+		});
+		const verificationCall = getCallFromTrace(trace, VERIFICATION_SELECTOR, {
+			from: this.entryPoint.address.toLowerCase(),
+			to: userOp.sender.toLowerCase(),
+		});
+		const accountCreationCall = getCallFromTrace(trace, CREATE_SENDER_SELECTOR);
 
 		const callGasLimit = getCallGasLimit(executeCall);
-		const actualPaymasterVerificationGasLimit = getCallGasLimit(validatePaymasterCall); // constant for _validatePaymasterPrepayment execution
+		const actualPaymasterVerificationGasLimit = getCallGasLimit(validatePaymasterCall);
 		const paymasterPostOpGasLimit = getCallGasLimit(postOpCall);
 		const actualAccountVerificationGasLimit = getCallGasLimit(verificationCall);
+		const createSenderGas = getCallGasLimit(accountCreationCall);
 
-		const epValidationGas =
-			preOpGas.toBigInt() - actualAccountVerificationGasLimit - actualPaymasterVerificationGasLimit;
-
-		const [accountValidationGasOverhead, paymasterValidationGasOverhead] = [
-			(epValidationGas * BigInt(57)) / BigInt(100),
-			(epValidationGas * BigInt(43)) / BigInt(100),
-		];
-
-		const verificationGasLimit = actualAccountVerificationGasLimit + accountValidationGasOverhead + BigInt(3000);
-		const paymasterVerificationGasLimit =
-			actualPaymasterVerificationGasLimit + paymasterValidationGasOverhead + BigInt(3000);
+		const verificationGasLimit = actualAccountVerificationGasLimit + createSenderGas + BigInt(20000);
+		const paymasterVerificationGasLimit = actualPaymasterVerificationGasLimit + BigInt(10000);
 
 		userOp.preVerificationGas = 50_000;
 
