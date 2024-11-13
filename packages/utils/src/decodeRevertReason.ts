@@ -1,7 +1,7 @@
 import { Interface } from "@ethersproject/abi";
 import { ethers } from "ethers";
-import { EntryPointSimulations__factory, IPaymaster__factory } from "./types";
 import { SimpleAccount__factory } from "./soltypes";
+import { EntryPointSimulations__factory, IPaymaster__factory } from "./types";
 
 const decodeRevertReasonContracts = new Interface(
 	[
@@ -20,6 +20,8 @@ export function decodeRevertReason(data: string | Error, nullIfNoMatch = true): 
 	if (typeof data !== "string") {
 		const err = data as any;
 		data = (err.data?.data ?? err.data ?? err.error?.data ?? err.error) as string;
+
+		if (!data) return "Unhandled error";
 	}
 
 	const methodSig = data.slice(0, 10);
