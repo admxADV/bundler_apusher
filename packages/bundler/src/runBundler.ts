@@ -167,8 +167,6 @@ export async function runBundler(argv: string[], overrideExit = true): Promise<B
 					{},
 					{
 						get(target: {}, method: string, receiver: any): any {
-							console.log(method);
-							console.log("ERROR");
 							throw new RpcError(`method debug_bundler_${method} is not supported`, -32601);
 						},
 					}

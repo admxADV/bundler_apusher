@@ -31,7 +31,6 @@ export function getNetworkProvider(url: string): JsonRpcProvider {
 		const infuraId = process.env.INFURA_ID1 ?? DEFAULT_INFURA_ID;
 		url = `https://${url}.infura.io/v3/${infuraId}`;
 	}
-	console.log("url=", process.env.RPC_ENDPOINT);
 	return new JsonRpcProvider(process.env.RPC_ENDPOINT);
 }
 

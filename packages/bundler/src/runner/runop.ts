@@ -67,7 +67,6 @@ async function main(): Promise<void> {
 		try {
 			// signer = Wallet.fromMnemonic(process.env.BUNDLER_SIGNER_MNEMONIC as string).connect(provider);
 			signer = new Wallet(process.env.BUNDLER_SIGNER_PK as string).connect(provider);
-			console.log(signer);
 			const network = await provider.getNetwork();
 			if (network.chainId === 1337 || network.chainId === 31337) {
 				deployFactory = true;
@@ -117,10 +116,8 @@ async function main(): Promise<void> {
 	const data = keccak256(Buffer.from("entryPoint()")).slice(0, 10);
 	console.log("data=", data);
 	await client.runUserOp(dest, data);
-	console.log("after run1");
 	// client.accountApi.overheads!.perUserOp = 30000
 	await client.runUserOp(dest, data);
-	console.log("after run2");
 	await bundler?.stop();
 }
 

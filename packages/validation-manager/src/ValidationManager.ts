@@ -276,7 +276,7 @@ export class ValidationManager implements IValidationManager {
 
 		const verificationCost = BigNumber.from(res.returnInfo.preOpGas).sub(userOp.preVerificationGas); // account + paymaster verify
 		const extraGas = BigNumber.from(userOp.verificationGasLimit)
-			.add(BigNumber.from(userOp.paymasterVerificationGasLimit))
+			.add(userOp.paymasterVerificationGasLimit ? BigNumber.from(userOp.paymasterVerificationGasLimit) : 0)
 			.sub(verificationCost)
 			.toNumber(); //
 		requireCond(

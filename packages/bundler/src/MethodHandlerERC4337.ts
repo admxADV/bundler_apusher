@@ -56,8 +56,8 @@ export interface EstimateUserOpGasResult {
 	 * estimated cost of calling the account with the given callData
 	 */
 	callGasLimit: BigNumberish;
-	paymasterPostOpGasLimit: BigNumberish;
-	paymasterVerificationGasLimit: BigNumberish;
+	paymasterPostOpGasLimit?: BigNumberish;
+	paymasterVerificationGasLimit?: BigNumberish;
 }
 
 type TraceItem = {
@@ -292,28 +292,34 @@ export class MethodHandlerERC4337 {
 			from: this.entryPoint.address.toLowerCase(),
 			to: userOp.sender.toLowerCase(),
 		});
-		const validatePaymasterCall = getCallFromTrace(trace, VALIDATE_PAYMASTER_SELECTOR, {
-			from: this.entryPoint.address.toLowerCase(),
-			to: userOp.paymaster!.toLowerCase(),
-		});
-		const postOpCall = getCallFromTrace(trace, POSTOP_SELECTOR, {
-			from: this.entryPoint.address.toLowerCase(),
-			to: userOp.paymaster!.toLowerCase(),
-		});
 		const verificationCall = getCallFromTrace(trace, VERIFICATION_SELECTOR, {
 			from: this.entryPoint.address.toLowerCase(),
 			to: userOp.sender.toLowerCase(),
 		});
+		const validatePaymasterCall = userOp.paymaster
+			? getCallFromTrace(trace, VALIDATE_PAYMASTER_SELECTOR, {
+					from: this.entryPoint.address.toLowerCase(),
+					to: userOp.paymaster.toLowerCase(),
+			  })
+			: null;
+		const postOpCall = userOp.paymaster
+			? getCallFromTrace(trace, POSTOP_SELECTOR, {
+					from: this.entryPoint.address.toLowerCase(),
+					to: userOp.paymaster.toLowerCase(),
+			  })
+			: null;
 		const accountCreationCall = getCallFromTrace(trace, CREATE_SENDER_SELECTOR);
 
-		const callGasLimit = getCallGasLimit(executeCall);
+		const callGasLimit = getCallGasLimit(executeCall) + BigInt(10_000);
 		const actualPaymasterVerificationGasLimit = getCallGasLimit(validatePaymasterCall);
-		const paymasterPostOpGasLimit = getCallGasLimit(postOpCall);
+		const paymasterPostOpGasLimit = userOp.paymaster ? getCallGasLimit(postOpCall) + BigInt(10_000) : undefined;
 		const actualAccountVerificationGasLimit = getCallGasLimit(verificationCall);
 		const createSenderGas = getCallGasLimit(accountCreationCall);
 
-		const verificationGasLimit = actualAccountVerificationGasLimit + createSenderGas + BigInt(20000);
-		const paymasterVerificationGasLimit = actualPaymasterVerificationGasLimit + BigInt(10000);
+		const verificationGasLimit = actualAccountVerificationGasLimit + createSenderGas + BigInt(30_000);
+		const paymasterVerificationGasLimit = userOp.paymaster
+			? actualPaymasterVerificationGasLimit + BigInt(10_000)
+			: undefined;
 
 		userOp.preVerificationGas = 50_000;
 
