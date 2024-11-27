@@ -15,7 +15,7 @@ import { ErrorDescription } from "@ethersproject/abi/lib/interface";
 import { JsonRpcProvider } from "@ethersproject/providers";
 import { Mutex } from "async-mutex";
 import Debug from "debug";
-import { BigNumber, BigNumberish, Signer } from "ethers";
+import { BigNumber, BigNumberish, Signer, ethers } from "ethers";
 import { isAddress } from "ethers/lib/utils";
 import { GetUserOpHashes__factory } from "../types";
 import { EventsManager } from "./EventsManager";
@@ -95,12 +95,15 @@ export class BundleManager {
 	): Promise<SendBundleReturn | undefined> {
 		try {
 			const feeData = await this.provider.getFeeData();
+			let gasPrice = feeData.gasPrice ?? null;
+			if (gasPrice && gasPrice.lte(1000000000)) gasPrice = ethers.utils.parseUnits("5", "gwei");
+
 			// TODO: estimate is not enough. should trace with validation rules, to prevent on-chain revert.
 			const tx = await this.entryPoint.populateTransaction.handleOps(userOps.map(packUserOp), beneficiary, {
 				type: 2,
 				nonce: await this.signer.getTransactionCount(),
-				maxPriorityFeePerGas: feeData.gasPrice ?? 0,
-				maxFeePerGas: feeData.gasPrice ?? 0,
+				maxPriorityFeePerGas: gasPrice ?? feeData.maxPriorityFeePerGas ?? ethers.utils.parseUnits("5", "gwei"),
+				maxFeePerGas: gasPrice ?? feeData.maxFeePerGas ?? ethers.utils.parseUnits("5", "gwei"),
 			});
 			tx.chainId = this.provider._network.chainId;
 			// tx.maxFeePerGas = feeData.maxFeePerGas ?? undefined;
